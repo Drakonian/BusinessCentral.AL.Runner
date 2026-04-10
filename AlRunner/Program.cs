@@ -364,7 +364,10 @@ Kernel32Shim.EnsureRegistered();
 List<(string Name, string Code)>? generatedCSharpList;
 
 bool hasExplicitPackages = packagePaths.Count > 0;
-if (hasExplicitPackages && inputGroups.Count > 1)
+// Multi-app mode only when inputs are .app files (not source directories).
+// Source directories should compile together so internal procedures are visible.
+bool hasAppInputs = inputGroups.Any(g => g.Path.EndsWith(".app", StringComparison.OrdinalIgnoreCase));
+if (hasExplicitPackages && inputGroups.Count > 1 && hasAppInputs)
 {
     // Multi-app mode: transpile each input group separately
     generatedCSharpList = new List<(string Name, string Code)>();
