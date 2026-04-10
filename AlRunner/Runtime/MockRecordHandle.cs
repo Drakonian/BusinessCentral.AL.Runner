@@ -597,12 +597,23 @@ public class MockRecordHandle
         var assembly = MockCodeunitHandle.CurrentAssembly;
         if (assembly == null) return;
 
+        // Search both the Record class and any TableExtension classes for the trigger
         var recordTypeName = $"Record{_tableId}";
-        var recordType = assembly.GetTypes().FirstOrDefault(t => t.Name == recordTypeName);
-        if (recordType == null) return;
+        var candidateTypes = assembly.GetTypes()
+            .Where(t => t.Name == recordTypeName || t.Name.StartsWith("TableExtension"))
+            .ToList();
 
+        foreach (var candidateType in candidateTypes)
+        {
+            if (TryFireOnValidateInType(candidateType, fieldNo))
+                return;
+        }
+    }
+
+    private bool TryFireOnValidateInType(Type type, int fieldNo)
+    {
         // Find the method with [FieldTriggerHandler(FieldTriggerType.OnValidate, fieldNo)]
-        foreach (var method in recordType.GetMethods(
+        foreach (var method in type.GetMethods(
             System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public |
             System.Reflection.BindingFlags.Instance))
         {
@@ -616,9 +627,9 @@ public class MockRecordHandle
             // FieldTriggerType.OnValidate == 0
             if (triggerType?.ToString() == "OnValidate" && triggerFieldNo is int fno && fno == fieldNo)
             {
-                // Create record instance and wire Rec to this MockRecordHandle
-                var instance = System.Runtime.CompilerServices.RuntimeHelpers.GetUninitializedObject(recordType);
-                var backingField = recordType.GetField("<Rec>k__BackingField",
+                // Create instance and wire Rec to this MockRecordHandle
+                var instance = System.Runtime.CompilerServices.RuntimeHelpers.GetUninitializedObject(type);
+                var backingField = type.GetField("<Rec>k__BackingField",
                     System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
                 backingField?.SetValue(instance, this);
 
@@ -631,9 +642,10 @@ public class MockRecordHandle
                     if (tie.InnerException != null) throw tie.InnerException;
                     throw;
                 }
-                return;
+                return true;
             }
         }
+        return false;
     }
 
     // -----------------------------------------------------------------------

@@ -622,7 +622,8 @@ public NavValue ALGetRangeMaxSafe(int fieldNo, NavType expectedType) => Rec.ALGe
             {
                 var typeText = firstParam.Type?.ToString() ?? "";
                 if (typeText.StartsWith("Codeunit") || typeText.StartsWith("Record") || typeText.StartsWith("Page")
-                    || typeText.StartsWith("Query") || typeText.StartsWith("Report") || typeText.StartsWith("XmlPort"))
+                    || typeText.StartsWith("Query") || typeText.StartsWith("Report") || typeText.StartsWith("XmlPort")
+                    || typeText.StartsWith("TableExtension") || typeText.StartsWith("PageExtension"))
                 {
                     // Keep the parameter, but add _parent assignment at the start of the body
                     var paramIdentifier = firstParam.Identifier.Text;
