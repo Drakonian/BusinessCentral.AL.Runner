@@ -372,8 +372,7 @@ if (dumpRewritten)
 // ---------------------------------------------------------------------------
 // Step 3: Compile rewritten C# with Roslyn
 // ---------------------------------------------------------------------------
-var allRewrittenCode = rewrittenList.Select(r => r.Code).ToList();
-var assembly = RoslynCompiler.Compile(allRewrittenCode);
+var assembly = RoslynCompiler.Compile(rewrittenList);
 if (assembly == null)
 {
     // Dump rewritten C# for debugging if not already dumped
@@ -995,14 +994,16 @@ public static class AlTranspiler
 // ===========================================================================
 public static class RoslynCompiler
 {
-    public static Assembly? Compile(string csharpSource) => Compile(new List<string> { csharpSource });
+    public static Assembly? Compile(string csharpSource) =>
+        Compile(new List<(string Name, string Code)> { ("source", csharpSource) });
 
-    public static Assembly? Compile(List<string> csharpSources)
+    public static Assembly? Compile(List<(string Name, string Code)> namedSources)
     {
-        // Give each source a distinct file path so error-producing sources can be identified and excluded
-        var syntaxTrees = csharpSources.Select((src, idx) =>
+        // Use AL object names as file paths for readable Roslyn diagnostics
+        // (e.g., "Codeunit50100.cs(45,12): error CS0246" instead of "source_0.cs")
+        var syntaxTrees = namedSources.Select((src, idx) =>
             Microsoft.CodeAnalysis.CSharp.CSharpSyntaxTree.ParseText(
-                src, path: $"source_{idx}.cs")).ToList();
+                src.Code, path: $"{src.Name}.cs")).ToList();
 
         var references = new List<Microsoft.CodeAnalysis.MetadataReference>();
 
