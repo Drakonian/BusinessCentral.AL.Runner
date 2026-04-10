@@ -1817,8 +1817,9 @@ public static class Executor
 
         foreach (var (testName, scopeType, parentType) in testScopes)
         {
-            // Reset the in-memory tables before each test
+            // Reset in-memory state before each test
             AlRunner.Runtime.MockRecordHandle.ResetAll();
+            AlRunner.Runtime.MockIsolatedStorage.ResetAll();
 
             try
             {

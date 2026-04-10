@@ -1092,6 +1092,17 @@ public NavValue ALGetRangeMaxSafe(int fieldNo, NavType expectedType) => Rec.ALGe
                 }
             }
 
+            // ALIsolatedStorage.ALSet/ALGet/ALContains/ALDelete -> MockIsolatedStorage
+            if (exprText == "ALIsolatedStorage" &&
+                (methodName == "ALSet" || methodName == "ALGet" || methodName == "ALContains" || methodName == "ALDelete"))
+            {
+                return visited.WithExpression(
+                    SyntaxFactory.MemberAccessExpression(
+                        SyntaxKind.SimpleMemberAccessExpression,
+                        SyntaxFactory.IdentifierName("MockIsolatedStorage"),
+                        SyntaxFactory.IdentifierName(methodName)));
+            }
+
             // NavForm.Run(pageId, record) -> no-op (page navigation not supported standalone)
             // NavForm.RunModal(bool, bool, pageId, record) -> FormResult.LookupOK
             if (exprText == "NavForm" && (methodName == "Run" || methodName == "RunModal"))
