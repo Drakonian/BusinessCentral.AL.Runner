@@ -112,7 +112,7 @@ while (argIdx < args.Length)
             else if (Directory.Exists(path))
             {
                 // Load all .al files from directory
-                var alFiles = Directory.GetFiles(path, "*.al", SearchOption.TopDirectoryOnly)
+                var alFiles = Directory.GetFiles(path, "*.al", SearchOption.AllDirectories)
                     .OrderBy(f => f) // deterministic order
                     .ToList();
                 if (alFiles.Count == 0)
@@ -436,7 +436,7 @@ if (hasTests)
         foreach (var inputPath in inputPaths)
         {
             if (Directory.Exists(inputPath))
-                alFilePaths.AddRange(Directory.GetFiles(inputPath, "*.al", SearchOption.TopDirectoryOnly));
+                alFilePaths.AddRange(Directory.GetFiles(inputPath, "*.al", SearchOption.AllDirectories));
             else if (File.Exists(inputPath))
                 alFilePaths.Add(inputPath);
         }
