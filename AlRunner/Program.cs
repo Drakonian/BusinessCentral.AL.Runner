@@ -1841,22 +1841,21 @@ public static class RoslynCompiler
                     }
                 }
 
+                var treesToRemove = currentTrees
+                    .Where(t => errorTreePaths.Contains(t.FilePath))
+                    .ToList();
+
                 currentTrees = currentTrees
                     .Where(t => !errorTreePaths.Contains(t.FilePath))
                     .ToList();
 
                 Log.Info($"Retry round {round}: removed {errorTreePaths.Count} file(s), {currentTrees.Count} remaining");
 
-                var retryCompilation = Microsoft.CodeAnalysis.CSharp.CSharpCompilation.Create(
-                    "AlRunnerGenerated",
-                    currentTrees,
-                    references,
-                    new Microsoft.CodeAnalysis.CSharp.CSharpCompilationOptions(
-                        Microsoft.CodeAnalysis.OutputKind.DynamicallyLinkedLibrary)
-                        .WithAllowUnsafe(true));
+                // Use RemoveSyntaxTrees for incremental reuse of Roslyn internal state
+                compilation = compilation.RemoveSyntaxTrees(treesToRemove);
 
                 using var retryMs = new MemoryStream();
-                var retryResult = retryCompilation.Emit(retryMs);
+                var retryResult = compilation.Emit(retryMs);
 
                 if (retryResult.Success)
                 {
