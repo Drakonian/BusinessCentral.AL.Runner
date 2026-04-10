@@ -70,6 +70,8 @@ def parse_central_directory(data, cd_start, entry_count):
         comment_len  = struct.unpack_from('<H', data, pos + 32)[0]
         local_offset = struct.unpack_from('<I', data, pos + 42)[0]
         name = data[pos+46:pos+46+name_len].decode('utf-8', errors='replace')
+        # BC artifacts use Windows-style backslash paths — normalize to forward slash
+        name = name.replace('\\', '/')
 
         entries.append({
             'name':        name,
