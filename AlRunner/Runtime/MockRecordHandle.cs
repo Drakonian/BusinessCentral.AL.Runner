@@ -85,6 +85,12 @@ public class MockRecordHandle
         _fields = new Dictionary<int, NavValue>();
     }
 
+    /// <summary>
+    /// ALRecordId property — returns a NavRecordId representing this record's identity.
+    /// In standalone mode, returns NavRecordId.Default since we don't have real table metadata.
+    /// </summary>
+    public NavRecordId ALRecordId => NavRecordId.Default;
+
     public void SetFieldValueSafe(int fieldNo, NavType expectedType, NavValue value)
     {
         _fields[fieldNo] = value;
@@ -98,6 +104,25 @@ public class MockRecordHandle
     public void SetFieldValueSafe(int fieldNo, NavType expectedType, NavValue value, bool validate)
     {
         _fields[fieldNo] = value;
+    }
+
+    /// <summary>
+    /// Extension-scoped SetFieldValueSafe — called when code accesses a field defined
+    /// in a table extension. The BC compiler emits (extensionId, fieldId, type, value).
+    /// We ignore the extensionId and delegate to the standard overload.
+    /// </summary>
+    public void SetFieldValueSafe(int extensionId, int fieldNo, NavType expectedType, NavValue value)
+    {
+        SetFieldValueSafe(fieldNo, expectedType, value);
+    }
+
+    /// <summary>
+    /// Extension-scoped SetFieldValueSafe with validate flag.
+    /// Called as (extensionId, fieldId, type, value, validate).
+    /// </summary>
+    public void SetFieldValueSafe(int extensionId, int fieldNo, NavType expectedType, NavValue value, bool validate)
+    {
+        SetFieldValueSafe(fieldNo, expectedType, value, validate);
     }
 
     public NavValue GetFieldValueSafe(int fieldNo, NavType expectedType)
@@ -128,6 +153,34 @@ public class MockRecordHandle
     /// In standalone mode, we ignore it and return the field value.
     /// </summary>
     public NavValue GetFieldValueSafe(int fieldNo, NavType expectedType, bool useLocale)
+    {
+        return GetFieldValueSafe(fieldNo, expectedType);
+    }
+
+    /// <summary>
+    /// Extension-scoped GetFieldValueSafe — called when code reads a field defined
+    /// in a table extension. The BC compiler emits (extensionId, fieldId, type).
+    /// We ignore the extensionId and delegate to the standard overload.
+    /// </summary>
+    public NavValue GetFieldValueSafe(int extensionId, int fieldNo, NavType expectedType)
+    {
+        return GetFieldValueSafe(fieldNo, expectedType);
+    }
+
+    /// <summary>
+    /// Extension-scoped GetFieldValueSafe with locale flag.
+    /// Called as (extensionId, fieldId, type, useLocale).
+    /// </summary>
+    public NavValue GetFieldValueSafe(int extensionId, int fieldNo, NavType expectedType, bool useLocale)
+    {
+        return GetFieldValueSafe(fieldNo, expectedType);
+    }
+
+    /// <summary>
+    /// Extension-scoped GetFieldRefSafe.
+    /// Called as (extensionId, fieldId, type).
+    /// </summary>
+    public NavValue GetFieldRefSafe(int extensionId, int fieldNo, NavType expectedType)
     {
         return GetFieldValueSafe(fieldNo, expectedType);
     }
@@ -1325,6 +1378,16 @@ public class MockRecordHandle
     /// for record method dispatch with error handling level.
     /// </summary>
     public object? Invoke(DataError errorLevel, int memberId, object[] args)
+    {
+        return Invoke(memberId, args);
+    }
+
+    /// <summary>
+    /// Extension-scoped Invoke — called when invoking a method defined in a table
+    /// extension. The BC compiler emits (extensionId, memberId, args).
+    /// We ignore the extensionId and delegate to the standard Invoke.
+    /// </summary>
+    public object? Invoke(int extensionId, int memberId, object[] args)
     {
         return Invoke(memberId, args);
     }
