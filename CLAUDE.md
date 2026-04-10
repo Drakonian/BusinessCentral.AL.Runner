@@ -104,6 +104,20 @@ The following have been removed (they were stubs for unsupported features):
 
 ---
 
+## Agent Guide (`--guide`)
+
+The CLI has a `--guide` flag that prints a comprehensive test-writing reference
+for AI coding agents. The guide is emitted by `PrintGuide()` in `Program.cs`.
+
+**When modifying the runner's capabilities (new mock methods, new supported AL
+features, new CLI flags), update the guide text in `PrintGuide()` to match.**
+The guide is the primary way external agents discover what the runner supports.
+
+The `--help` output references the guide at the bottom so agents discover it
+automatically when they run `al-runner -h`.
+
+---
+
 ## Developer Contract
 
 **What you can unit-test with al-runner:**
