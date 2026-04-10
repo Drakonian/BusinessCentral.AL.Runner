@@ -19,7 +19,12 @@
     <PackageProjectUrl>https://github.com/StefanMaron/MSDyn365BC.AL.Runner</PackageProjectUrl>
     <RepositoryUrl>https://github.com/StefanMaron/MSDyn365BC.AL.Runner</RepositoryUrl>
     <PackageTags>business-central;al;unit-test;runner</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="../README.md" Pack="true" PackagePath="/" />
+  </ItemGroup>
 
   <PropertyGroup>
     <_ALToolVersion>16.2.28.57946</_ALToolVersion>
