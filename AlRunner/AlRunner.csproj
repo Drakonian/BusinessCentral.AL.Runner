@@ -72,7 +72,7 @@
       <HintPath>$(ALCompilerPath)/System.IO.Packaging.dll</HintPath>
     </Reference>
 
-    <!-- BC Service Tier DLLs (referenced by the generated C# at compile time) -->
+    <!-- BC Service Tier DLLs (referenced at compile time, auto-downloaded at runtime if missing) -->
     <Reference Include="Microsoft.Dynamics.Nav.Ncl">
       <HintPath>$(ServiceTierPath)/Microsoft.Dynamics.Nav.Ncl.dll</HintPath>
     </Reference>
@@ -98,5 +98,13 @@
       <HintPath>$(ServiceTierPath)/Microsoft.Dynamics.Nav.Types.Report.Runtime.dll</HintPath>
     </Reference>
   </ItemGroup>
+
+  <!-- Auto-download BC Service Tier DLLs before build if not present.
+       Uses dotnet-script (C# scripting) to run ArtifactDownloader logic. -->
+  <Target Name="EnsureBCServiceTierDlls" BeforeTargets="ResolveAssemblyReferences"
+          Condition="!Exists('$(ServiceTierPath)/Microsoft.Dynamics.Nav.Types.dll')">
+    <Message Importance="high" Text="BC Service Tier DLLs not found at $(ServiceTierPath). Downloading..." />
+    <Exec Command="dotnet run --project $(MSBuildProjectDirectory)/../tools/DownloadArtifacts -- $(_BCVersion) $(ServiceTierPath)" />
+  </Target>
 
 </Project>
