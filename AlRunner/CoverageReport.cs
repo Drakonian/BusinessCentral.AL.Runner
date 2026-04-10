@@ -172,7 +172,7 @@ public static class CoverageReport
         double lineRate = totalLines > 0 ? (double)coveredLines / totalLines : 0;
 
         writer.WriteStartElement("coverage");
-        writer.WriteAttributeString("line-rate", lineRate.ToString("F4"));
+        writer.WriteAttributeString("line-rate", lineRate.ToString("F4", System.Globalization.CultureInfo.InvariantCulture));
         writer.WriteAttributeString("branch-rate", "0");
         writer.WriteAttributeString("lines-covered", coveredLines.ToString());
         writer.WriteAttributeString("lines-valid", totalLines.ToString());
@@ -182,7 +182,7 @@ public static class CoverageReport
         writer.WriteStartElement("packages");
         writer.WriteStartElement("package");
         writer.WriteAttributeString("name", "al-source");
-        writer.WriteAttributeString("line-rate", lineRate.ToString("F4"));
+        writer.WriteAttributeString("line-rate", lineRate.ToString("F4", System.Globalization.CultureInfo.InvariantCulture));
 
         writer.WriteStartElement("classes");
 
@@ -196,7 +196,7 @@ public static class CoverageReport
             writer.WriteStartElement("class");
             writer.WriteAttributeString("name", Path.GetFileNameWithoutExtension(fileName));
             writer.WriteAttributeString("filename", filePath);
-            writer.WriteAttributeString("line-rate", fRate.ToString("F4"));
+            writer.WriteAttributeString("line-rate", fRate.ToString("F4", System.Globalization.CultureInfo.InvariantCulture));
 
             writer.WriteStartElement("lines");
             foreach (var (lineNum, hits) in lines.OrderBy(kv => kv.Key))
