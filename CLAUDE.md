@@ -75,8 +75,8 @@ These are the BC runtime types replaced in standalone mode:
 | `MockArray<T>` | `NavArray<T>` | Generic array without ITreeObject requirement. |
 | `MockRecordArray` | `NavArray<NavRecordHandle>` | Array of MockRecordHandle (Record[] in AL). |
 | `MockInterfaceHandle` | `NavInterfaceHandle` | AL interface dispatch stub. |
-| `MockAssert` | Codeunit 130 "Library Assert" | Assert.AreEqual, AreNotEqual, IsTrue, IsFalse, ExpectedError. |
-| `MockIsolatedStorage` | `ALIsolatedStorage` | In-memory key-value store (Set, Get, Delete, Contains). |
+| `MockAssert` | Codeunit 130 "Library Assert" | Assert.AreEqual, AreNotEqual, IsTrue, IsFalse, ExpectedError, ExpectedErrorCode, ExpectedTestFieldError. |
+| `MockIsolatedStorage` | `ALIsolatedStorage` | In-memory key-value store (Set, Get, Delete, Contains). Handles NavSecretText via reflection. |
 | `MockTextBuilder` | `NavTextBuilder` | In-memory StringBuilder (Append, AppendLine, ToText). |
 | `AlScope.AssertError()` | `asserterror` keyword | Catches expected errors, stores message. |
 | `AlDialog` | `NavDialog` static methods | Message() prints to console; Error() throws Exception. |
@@ -207,6 +207,13 @@ end
   directories. Dependencies can be loaded from .app for symbol references only.
 - **Filter groups** (FilterGroup) — not tracked.
 - **ALGetFilter** — returns empty string even when filters are active.
+- **InitValue** — field InitValue properties from AL source are not applied by
+  `MockRecordHandle.ALInit()`. Fields always initialize to type defaults (0, "", false).
+- **ALFieldCaption** — returns "FieldNN" instead of the actual caption. The runner
+  lacks field metadata infrastructure.
+- **Codeunit OnRun with record parameter** — `RunCodeunit` only finds parameterless
+  `OnRun()` methods. Codeunits whose OnRun trigger takes a record parameter (e.g.,
+  `trigger OnRun(var Rec: Record "Job Queue Entry")`) will silently do nothing.
 
 ---
 
@@ -216,7 +223,8 @@ These have been implemented and are tested by the test suite:
 
 1. **Assert codeunit mock** (`Runtime/MockAssert.cs`) — `Assert.AreEqual`,
    `Assert.AreNotEqual`, `Assert.IsTrue`, `Assert.IsFalse`, `Assert.ExpectedError`,
-   `Assert.ExpectedErrorCode`. Wired into `MockCodeunitHandle` so calls to
+   `Assert.ExpectedErrorCode` (1-arg and 2-arg), `Assert.ExpectedTestFieldError`,
+   `Assert.ExpectedMessage`. Wired into `MockCodeunitHandle` so calls to
    codeunit 130 (Library Assert) route to `MockAssert`. An AL stub
    (`stubs/LibraryAssert.al`) is auto-loaded so test code compiles without
    requiring the real Assert .app.
@@ -398,6 +406,10 @@ Follows the `BusinessCentral.AL.*` pattern:
 | `tests/21-expected-error-substring/` | ExpectedError substring matching |
 | `tests/22-record-persistence/` | Record persistence across calls |
 | `tests/23-error-line-mapping/` | Error line mapping in test output |
+| `tests/24-secret-text/` | SecretText + IsolatedStorage + ALCompiler.ToSecretText |
+| `tests/25-expected-error-code/` | Assert.ExpectedErrorCode (1-arg) |
+| `tests/26-time-format/` | NavTime comparison and formatting |
+| `tests/27-testfield-error/` | Assert.ExpectedTestFieldError |
 | `.github/workflows/test-matrix.yml` | CI: runs all tests across BC version matrix |
 | `.github/workflows/publish.yml` | CI: publish to NuGet on tag |
 | `.github/workflows/coverage-demo.yml` | CI: coverage report demo |
