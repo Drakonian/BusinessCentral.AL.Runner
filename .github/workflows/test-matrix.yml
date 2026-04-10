@@ -57,9 +57,10 @@ jobs:
         run: |
           TARGET_DIR="${HOME}/.local/share/al-runner/artifacts/${BC_VERSION}"
           dotnet run --project tools/DownloadArtifacts -- service-tier "$BC_VERSION" "$TARGET_DIR"
+          echo "BC_SERVICE_TIER_PATH=${TARGET_DIR}" >> "$GITHUB_ENV"
 
       - name: Build
-        run: dotnet build AlRunner/ -p:_BCVersion=${{ matrix.bc-version }}
+        run: dotnet build AlRunner/ -p:_BCVersion=${{ matrix.bc-version }} -p:ServiceTierPath="${BC_SERVICE_TIER_PATH}"
 
       - name: Run tests with coverage
         run: |
