@@ -356,6 +356,134 @@ public static class AlCompat
         return Format(value);
     }
 
+    /// <summary>
+    /// Format with AL format string (e.g. '&lt;Year4&gt;-&lt;Month,2&gt;-&lt;Day,2&gt;').
+    /// The BC transpiler emits NavFormatEvaluateHelper.Format(session, value, length, formatString)
+    /// which the rewriter strips the session arg from, producing AlCompat.Format(value, length, formatString).
+    /// </summary>
+    public static string Format(object? value, int length, string formatString)
+    {
+        // Unwrap NavDate / DateTime for date format strings
+        DateTime? dt = ExtractDateTime(value);
+        if (dt.HasValue && !string.IsNullOrEmpty(formatString))
+        {
+            var result = ApplyAlFormatString(dt.Value, formatString);
+            if (result != null)
+                return result;
+        }
+
+        // Fallback: ignore the format string and use default formatting
+        return Format(value);
+    }
+
+    /// <summary>
+    /// Extract a DateTime from various BC/runtime value types.
+    /// </summary>
+    private static DateTime? ExtractDateTime(object? value)
+    {
+        if (value is DateTime dt) return dt;
+        if (value is MockVariant mv) return ExtractDateTime(mv.Value);
+        // NavDate wraps a DateTime — try to extract it
+        var typeName = value?.GetType().Name;
+        if (typeName == "NavDate" || typeName == "NavDateTime")
+        {
+            try
+            {
+                // NavDate has an implicit conversion to DateTime
+                return (DateTime)Convert.ChangeType(value!, typeof(DateTime));
+            }
+            catch
+            {
+                // Try via Value property
+                try
+                {
+                    var valProp = value!.GetType().GetProperty("Value");
+                    if (valProp != null)
+                    {
+                        var inner = valProp.GetValue(value);
+                        if (inner is DateTime innerDt) return innerDt;
+                    }
+                }
+                catch { }
+            }
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Apply an AL format string to a DateTime.
+    /// Supports tokens: Year4, Year2, Month, Month2, Day, Day2, Hours24, Minutes, Seconds.
+    /// The optional ,N suffix on tokens indicates zero-padded width.
+    /// Returns null if the format string is not recognized as a date format.
+    /// </summary>
+    private static string? ApplyAlFormatString(DateTime dt, string formatString)
+    {
+        // Check if this looks like an AL format string with angle brackets
+        if (!formatString.Contains('<'))
+            return null;
+
+        var result = new System.Text.StringBuilder();
+        int i = 0;
+        while (i < formatString.Length)
+        {
+            if (formatString[i] == '<')
+            {
+                int end = formatString.IndexOf('>', i);
+                if (end < 0)
+                {
+                    result.Append(formatString[i]);
+                    i++;
+                    continue;
+                }
+
+                string token = formatString.Substring(i + 1, end - i - 1);
+                result.Append(ResolveAlDateToken(dt, token));
+                i = end + 1;
+            }
+            else
+            {
+                result.Append(formatString[i]);
+                i++;
+            }
+        }
+        return result.ToString();
+    }
+
+    /// <summary>
+    /// Resolve a single AL date format token like "Year4", "Month,2", "Day,2".
+    /// </summary>
+    private static string ResolveAlDateToken(DateTime dt, string token)
+    {
+        // Parse token name and optional width: "Month,2" → name="Month", width=2
+        string name;
+        int width = 0;
+        int commaPos = token.IndexOf(',');
+        if (commaPos >= 0)
+        {
+            name = token.Substring(0, commaPos).Trim();
+            int.TryParse(token.Substring(commaPos + 1).Trim(), out width);
+        }
+        else
+        {
+            name = token.Trim();
+        }
+
+        string raw = name.ToLowerInvariant() switch
+        {
+            "year4" => dt.Year.ToString("D4"),
+            "year2" => (dt.Year % 100).ToString("D2"),
+            "year" => width >= 4 ? dt.Year.ToString("D4") : (dt.Year % 100).ToString("D2"),
+            "month" => width > 0 ? dt.Month.ToString($"D{width}") : dt.Month.ToString(),
+            "day" => width > 0 ? dt.Day.ToString($"D{width}") : dt.Day.ToString(),
+            "hours24" => width > 0 ? dt.Hour.ToString($"D{width}") : dt.Hour.ToString(),
+            "hours12" => (dt.Hour % 12 == 0 ? 12 : dt.Hour % 12).ToString(width > 0 ? $"D{width}" : ""),
+            "minutes" => width > 0 ? dt.Minute.ToString($"D{width}") : dt.Minute.ToString(),
+            "seconds" => width > 0 ? dt.Second.ToString($"D{width}") : dt.Second.ToString(),
+            _ => $"<{token}>", // Unknown token — preserve as-is
+        };
+        return raw;
+    }
+
     private static string FormatDecimal(decimal d)
     {
         // AL Format() shows whole numbers without decimals
