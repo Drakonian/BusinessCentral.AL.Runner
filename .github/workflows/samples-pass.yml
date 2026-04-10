@@ -42,10 +42,12 @@ jobs:
       - name: Run all samples with coverage
         run: |
           EXIT=0
-          SUMMARY_FILE=$(mktemp)
 
-          echo "## Test Results" >> "$SUMMARY_FILE"
-          echo "" >> "$SUMMARY_FILE"
+          # Write summary header
+          echo "## Test Results" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| | Sample | Tests | Coverage |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---|--------|-------|----------|" >> "$GITHUB_STEP_SUMMARY"
 
           for sample in 01-pure-function 02-record-operations 03-interface-injection 04-asserterror 05-known-limitation; do
             echo "::group::Sample ${sample}"
@@ -63,20 +65,10 @@ jobs:
             COVERAGE=${COVERAGE:-"n/a"}
 
             if [ "${FAILED:-0}" = "0" ]; then
-              ICON="✅"
+              echo "| :white_check_mark: | ${sample} | ${PASSED:-0} passed, ${FAILED:-0} failed | ${COVERAGE} |" >> "$GITHUB_STEP_SUMMARY"
             else
-              ICON="❌"
+              echo "| :x: | ${sample} | ${PASSED:-0} passed, ${FAILED:-0} failed | ${COVERAGE} |" >> "$GITHUB_STEP_SUMMARY"
             fi
-
-            echo "${ICON} | ${sample} | ${PASSED:-0} passed, ${FAILED:-0} failed | ${COVERAGE}" >> "$SUMMARY_FILE"
           done
 
-          # Build summary table
-          {
-            echo "| | Sample | Tests | Coverage |"
-            echo "|---|--------|-------|----------|"
-            cat "$SUMMARY_FILE" | grep "^[✅❌]"
-          } > "$GITHUB_STEP_SUMMARY"
-
-          rm -f "$SUMMARY_FILE"
           exit $EXIT
