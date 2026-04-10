@@ -42,6 +42,15 @@ public class MockCodeunitHandle
     }
 
     /// <summary>
+    /// AL assignment: CodeunitA := CodeunitB.
+    /// Copies the codeunit reference so both variables point to the same instance.
+    /// </summary>
+    public void ALAssign(MockCodeunitHandle other)
+    {
+        _codeunitInstance = other._codeunitInstance;
+    }
+
+    /// <summary>
     /// Static factory matching the rewritten constructor pattern.
     /// </summary>
     public static MockCodeunitHandle Create(int codeunitId)
