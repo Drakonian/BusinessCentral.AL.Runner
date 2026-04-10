@@ -61,17 +61,10 @@ jobs:
 
       - name: Run all tests
         run: |
-          # Single invocation — all test cases compile and run together (~1s vs ~75s)
-          DIRS=$(ls -d tests/*/src tests/*/test 2>/dev/null | grep -v '06-' | sort)
-          OUTPUT=$(dotnet run --no-build --project AlRunner -- $DIRS 2>&1)
-          EXIT=$?
-          echo "$OUTPUT"
-
-          RESULTS=$(echo "$OUTPUT" | grep "^Results:")
-          echo "## BC ${{ matrix.bc-version }}" >> "$GITHUB_STEP_SUMMARY"
-          echo '```' >> "$GITHUB_STEP_SUMMARY"
-          echo "$RESULTS" >> "$GITHUB_STEP_SUMMARY"
-          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          EXIT=0
+          for sample in $(ls -d tests/*/src 2>/dev/null | sed 's|tests/||;s|/src||' | grep -v '06-' | sort); do
+            dotnet run --no-build --project AlRunner -- "tests/${sample}/src" "tests/${sample}/test" || EXIT=1
+          done
           exit $EXIT
           done
           exit $EXIT
