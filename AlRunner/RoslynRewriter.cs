@@ -399,6 +399,7 @@ public NavValue ALGetRangeMaxSafe(int fieldNo, NavType expectedType) => Rec.ALGe
         {
             var parentObjectCode = @"
 public MockRecordHandle ParentObject => Rec;
+public MockCurrPage CurrPage { get; } = new MockCurrPage();
 ";
             var pageMembers = CSharpSyntaxTree.ParseText(
                 $"class _Temp_ {{ {parentObjectCode} }}").GetRoot()
@@ -473,12 +474,9 @@ public MockRecordHandle ParentObject => Rec;
             }
         }
 
-        // Remove CurrPage and properties that cast to NavForm (page infrastructure).
+        // Remove properties that cast to NavForm — rewritten CurrPage will be injected below.
         if (member is PropertyDeclarationSyntax propCheck)
         {
-            if (propCheck.Identifier.Text == "CurrPage")
-                return true;
-            // Remove properties whose body casts ParentObject to NavForm
             var propText = propCheck.ToString();
             if (propText.Contains("(NavForm)"))
                 return true;

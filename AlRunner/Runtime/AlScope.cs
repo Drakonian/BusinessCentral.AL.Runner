@@ -112,6 +112,20 @@ public class AlScope : IDisposable
 
 /// <summary>
 /// Instance replacement for NavDialog (the BC dialog/progress window object).
+/// No-op CurrPage stub for page extensions.
+/// Page extension code calls CurrPage.Update(), CurrPage.Editable, etc.
+/// In standalone mode, all operations are no-ops.
+/// </summary>
+public class MockCurrPage
+{
+    public bool Editable { get; set; }
+    public void Update(bool saveRecord = true) { }
+    public void Close() { }
+    public void Activate() { }
+    public void SaveRecord() { }
+}
+
+/// <summary>
 /// The transpiled code creates NavDialog instances for progress bars (ALOpen, ALUpdate, ALClose).
 /// In standalone mode, we no-op these operations.
 /// </summary>
