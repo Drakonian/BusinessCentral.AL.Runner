@@ -531,6 +531,16 @@ public class MockRecordHandle
             throw new Exception($"TestField failed: field {fieldNo} in table {_tableId} expected '{expectedStr}' but was '{actualStr}'");
     }
 
+    /// <summary>Overload: TestField with bool value (transpiler pattern for Boolean fields).</summary>
+    public void ALTestFieldSafe(int fieldNo, NavType expectedType, bool expectedValue)
+    {
+        var actual = GetFieldValueSafe(fieldNo, expectedType);
+        var actualStr = NavValueToString(actual);
+        var expectedStr = expectedValue.ToString();
+        if (actualStr != expectedStr)
+            throw new Exception($"TestField failed: field {fieldNo} in table {_tableId} expected '{expectedStr}' but was '{actualStr}'");
+    }
+
     /// <summary>AL's TestField for NavValue comparisons (used in some transpiler patterns).</summary>
     public void ALTestFieldNavValueSafe(int fieldNo, NavType expectedType, NavValue expectedValue)
     {
@@ -587,6 +597,12 @@ public class MockRecordHandle
     /// No-op in standalone mode since all fields are always in memory.
     /// </summary>
     public void ALSetLoadFields(params int[] fieldNos)
+    {
+        // No-op: all fields always loaded in in-memory store
+    }
+
+    /// <summary>Overload with DataError level (transpiler pattern).</summary>
+    public void ALSetLoadFields(DataError errorLevel, params int[] fieldNos)
     {
         // No-op: all fields always loaded in in-memory store
     }

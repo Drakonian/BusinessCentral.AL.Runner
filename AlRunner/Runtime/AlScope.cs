@@ -180,6 +180,14 @@ public static class AlDialog
     }
 
     /// <summary>
+    /// Overload for AL's Error(ErrorInfo) pattern where NavALErrorInfo is passed directly.
+    /// </summary>
+    public static void Error(Microsoft.Dynamics.Nav.Runtime.NavALErrorInfo errorInfo)
+    {
+        throw new Exception(errorInfo?.ToString() ?? "Error");
+    }
+
+    /// <summary>
     /// Converts AL format placeholders (%1, %2, ...) to .NET format ({0}, {1}, ...).
     /// </summary>
     private static string ConvertAlFormat(string alFormat)

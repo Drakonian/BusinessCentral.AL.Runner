@@ -167,9 +167,18 @@ public class MockCodeunitHandle
     /// Replacement for NavCodeunitHandle.Target.Run(DataError, record).
     /// In BC, this runs the codeunit passing a record parameter.
     /// </summary>
-    public void Run(DataError errorLevel, object? record = null)
+    public bool Run(DataError errorLevel, object? record = null)
     {
-        RunCodeunit(_codeunitId);
+        try
+        {
+            RunCodeunit(_codeunitId);
+            return true;
+        }
+        catch
+        {
+            if (errorLevel == DataError.TrapError) return false;
+            throw;
+        }
     }
 
     /// <summary>

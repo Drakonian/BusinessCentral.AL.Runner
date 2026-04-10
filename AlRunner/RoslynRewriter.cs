@@ -949,6 +949,45 @@ public NavValue ALGetRangeMaxSafe(int fieldNo, NavType expectedType) => Rec.ALGe
         // Now recurse into children first
         var visited = (InvocationExpressionSyntax)base.VisitInvocationExpression(node)!;
 
+        // NavText?.ToLowerInvariant() / ?.ToUpperInvariant() -> NavText?.ToString().ToLowerInvariant()
+        // NavText implicitly converts to ReadOnlySpan<char>, which picks up the wrong
+        // MemoryExtensions.ToLowerInvariant(ReadOnlySpan, Span) overload. Insert .ToString()
+        // to force string.ToLowerInvariant() resolution.
+        if (visited.Expression is MemberBindingExpressionSyntax memberBinding &&
+            visited.ArgumentList.Arguments.Count == 0 &&
+            (memberBinding.Name.Identifier.Text == "ToLowerInvariant" ||
+             memberBinding.Name.Identifier.Text == "ToUpperInvariant"))
+        {
+            // x?.ToLowerInvariant() -> x?.ToString().ToLowerInvariant()
+            var toStringCall = SyntaxFactory.InvocationExpression(
+                SyntaxFactory.MemberBindingExpression(SyntaxFactory.IdentifierName("ToString")),
+                SyntaxFactory.ArgumentList());
+            return visited.WithExpression(
+                SyntaxFactory.MemberAccessExpression(
+                    SyntaxKind.SimpleMemberAccessExpression,
+                    toStringCall,
+                    memberBinding.Name));
+        }
+
+        // x.ToLowerInvariant() / x.ToUpperInvariant() (non-conditional) -> x.ToString().ToLowerInvariant()
+        if (visited.Expression is MemberAccessExpressionSyntax maToLower &&
+            visited.ArgumentList.Arguments.Count == 0 &&
+            (maToLower.Name.Identifier.Text == "ToLowerInvariant" ||
+             maToLower.Name.Identifier.Text == "ToUpperInvariant"))
+        {
+            var toStringCall = SyntaxFactory.InvocationExpression(
+                SyntaxFactory.MemberAccessExpression(
+                    SyntaxKind.SimpleMemberAccessExpression,
+                    maToLower.Expression,
+                    SyntaxFactory.IdentifierName("ToString")),
+                SyntaxFactory.ArgumentList());
+            return visited.WithExpression(
+                SyntaxFactory.MemberAccessExpression(
+                    SyntaxKind.SimpleMemberAccessExpression,
+                    toStringCall,
+                    maToLower.Name));
+        }
+
         // NavDialog.ALMessage(this.Session, System.Guid.Parse("..."), fmt, args...)
         // -> AlDialog.Message(fmt, args...)
         if (visited.Expression is MemberAccessExpressionSyntax memberAccess)
@@ -1200,25 +1239,33 @@ public NavValue ALGetRangeMaxSafe(int fieldNo, NavType expectedType) => Rec.ALGe
                 }
             }
 
-            // ALSystemString.ALLowercase(x) -> (x?.ToLowerInvariant() ?? "")
-            // ALSystemString.ALUppercase(x) -> (x?.ToUpperInvariant() ?? "")
+            // ALSystemString.ALLowercase(x) -> (x?.ToString().ToLowerInvariant() ?? "")
+            // ALSystemString.ALUppercase(x) -> (x?.ToString().ToUpperInvariant() ?? "")
             // These BC runtime methods access NavEnvironment for CultureInfo, crashing on Linux.
+            // We call .ToString() first to ensure the string overload is used, not the
+            // MemoryExtensions.ToLowerInvariant(ReadOnlySpan, Span) overload from System.Memory.
             if (exprText == "ALSystemString" && (methodName == "ALLowercase" || methodName == "ALUppercase"))
             {
                 var args = visited.ArgumentList.Arguments;
                 if (args.Count == 1)
                 {
                     var netMethod = methodName == "ALLowercase" ? "ToLowerInvariant" : "ToUpperInvariant";
-                    // Build: (x?.ToLowerInvariant() ?? "")
+                    // Build: (x?.ToString().ToLowerInvariant() ?? "")
                     var arg = args[0].Expression;
+                    var toStringCall = SyntaxFactory.InvocationExpression(
+                        SyntaxFactory.MemberBindingExpression(
+                            SyntaxFactory.IdentifierName("ToString")),
+                        SyntaxFactory.ArgumentList());
+                    var caseCall = SyntaxFactory.InvocationExpression(
+                        SyntaxFactory.MemberAccessExpression(
+                            SyntaxKind.SimpleMemberAccessExpression,
+                            toStringCall,
+                            SyntaxFactory.IdentifierName(netMethod)),
+                        SyntaxFactory.ArgumentList());
                     var nullCoalesce = SyntaxFactory.ParenthesizedExpression(
                         SyntaxFactory.BinaryExpression(
                             SyntaxKind.CoalesceExpression,
-                            SyntaxFactory.ConditionalAccessExpression(
-                                arg,
-                                SyntaxFactory.InvocationExpression(
-                                    SyntaxFactory.MemberBindingExpression(
-                                        SyntaxFactory.IdentifierName(netMethod)))),
+                            SyntaxFactory.ConditionalAccessExpression(arg, caseCall),
                             SyntaxFactory.LiteralExpression(
                                 SyntaxKind.StringLiteralExpression,
                                 SyntaxFactory.Literal(""))));

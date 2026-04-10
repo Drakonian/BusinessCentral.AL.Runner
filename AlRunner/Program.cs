@@ -1480,14 +1480,19 @@ public static class RoslynCompiler
 
         var references = new List<Microsoft.CodeAnalysis.MetadataReference>();
 
-        // .NET runtime assemblies
+        // .NET runtime assemblies — reference all System.*.dll, netstandard.dll, mscorlib.dll,
+        // and Microsoft.CSharp.dll so that generated code can resolve types like string.ToLowerInvariant()
+        // without accidentally binding to MemoryExtensions overloads from System.Memory.
         var runtimeDir = Path.GetDirectoryName(typeof(object).Assembly.Location)!;
-        foreach (var dll in new[] { "System.Runtime.dll", "System.Console.dll", "System.Collections.dll",
-                                     "System.Linq.dll", "netstandard.dll" })
+        foreach (var dllPath in Directory.GetFiles(runtimeDir, "*.dll"))
         {
-            var path = Path.Combine(runtimeDir, dll);
-            if (File.Exists(path))
-                references.Add(Microsoft.CodeAnalysis.MetadataReference.CreateFromFile(path));
+            var fileName = Path.GetFileName(dllPath);
+            if (fileName.StartsWith("System.", StringComparison.Ordinal) ||
+                fileName is "netstandard.dll" or "mscorlib.dll" or "Microsoft.CSharp.dll")
+            {
+                try { references.Add(Microsoft.CodeAnalysis.MetadataReference.CreateFromFile(dllPath)); }
+                catch { /* Skip DLLs that can't be loaded as metadata */ }
+            }
         }
         references.Add(Microsoft.CodeAnalysis.MetadataReference.CreateFromFile(typeof(object).Assembly.Location));
 
@@ -1528,16 +1533,8 @@ public static class RoslynCompiler
                 .Where(d => d.Severity == Microsoft.CodeAnalysis.DiagnosticSeverity.Error)
                 .ToList();
             Log.Info($"Roslyn compilation failed ({errors.Count} errors):");
-            foreach (var d in errors)
+            foreach (var d in errors.Take(30))
                 Log.Info($"  {d}");
-            var debugErrorFiles = errors
-                .Select(d => d.Location.SourceTree?.FilePath ?? "<null>")
-                .Distinct()
-                .OrderBy(p => p)
-                .ToList();
-            Log.Info($"Errors in {debugErrorFiles.Count} distinct file(s):");
-            foreach (var f in debugErrorFiles)
-                Log.Info($"  - {f}");
 
             // Iteratively remove error-producing source files and recompile.
             // Each round only removes files with DIRECT errors, preserving files
@@ -1575,8 +1572,6 @@ public static class RoslynCompiler
                     .ToList();
 
                 Log.Info($"Retry round {round}: removed {errorTreePaths.Count} file(s), {currentTrees.Count} remaining");
-                foreach (var p in errorTreePaths)
-                    Log.Info($"  - {p}");
 
                 var retryCompilation = Microsoft.CodeAnalysis.CSharp.CSharpCompilation.Create(
                     "AlRunnerGenerated",
