@@ -268,7 +268,19 @@ public class MockCodeunitHandle
                         MockAssert.IsTrue(args[0], msg);
                     return null;
                 }
-                // Fallback: treat as ExpectedMessage(expectedSubstring, actualError)
+                // Fallback: use method name lookup to distinguish between 2-arg Assert methods
+                var method2 = FindAssertMethodName(memberId);
+                if (method2 != null && method2.Contains("ExpectedTestFieldError", StringComparison.OrdinalIgnoreCase))
+                {
+                    MockAssert.ExpectedTestFieldError(args[0]?.ToString() ?? "", args[1]?.ToString() ?? "");
+                    return null;
+                }
+                if (method2 != null && method2.Contains("ExpectedErrorCode", StringComparison.OrdinalIgnoreCase))
+                {
+                    MockAssert.ExpectedErrorCode(args[0]?.ToString() ?? "", args[1]?.ToString() ?? "");
+                    return null;
+                }
+                // Default: treat as ExpectedMessage(expectedSubstring, actualError)
                 MockAssert.ExpectedMessage(args[0]?.ToString() ?? "", args[1]?.ToString() ?? "");
                 return null;
 

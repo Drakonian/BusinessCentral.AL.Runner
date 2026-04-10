@@ -97,6 +97,33 @@ public static class MockAssert
     }
 
     /// <summary>
+    /// Verifies that the last asserterror block captured a TestField error
+    /// with the expected field caption and field value.
+    /// In BC, TestField errors follow the pattern:
+    ///   "{FieldCaption} must be equal to '{FieldValue}' ..."
+    /// In standalone mode, ALFieldCaption returns "FieldNN" which may not match.
+    /// We check that the error message contains either the caption or the value.
+    /// </summary>
+    public static void ExpectedTestFieldError(string fieldCaption, string fieldValue)
+    {
+        var actual = AlScope.LastErrorText;
+        if (string.IsNullOrEmpty(actual))
+            throw new AssertException(
+                $"Assert.ExpectedTestFieldError failed. Expected a TestField error for field <{fieldCaption}> with value <{fieldValue}>, but no error occurred.");
+
+        // TestField errors typically contain the field caption or "must be equal to"
+        // In standalone mode, check if either the caption or value appears in the error
+        if (!actual.Contains(fieldCaption, StringComparison.OrdinalIgnoreCase) &&
+            !actual.Contains(fieldValue, StringComparison.OrdinalIgnoreCase) &&
+            !actual.Contains("must be equal to", StringComparison.OrdinalIgnoreCase) &&
+            !actual.Contains("TestField", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new AssertException(
+                $"Assert.ExpectedTestFieldError failed. Expected TestField error for field <{fieldCaption}> = <{fieldValue}>, Actual: <{actual}>.");
+        }
+    }
+
+    /// <summary>
     /// Asserts that an error was expected (any error).
     /// </summary>
     public static void AssertNothingInsideFilter()

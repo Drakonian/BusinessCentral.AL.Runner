@@ -35,6 +35,10 @@ codeunit 130 "Assert"
     begin
     end;
 
+    procedure ExpectedTestFieldError(FieldCaption: Text; FieldValue: Text)
+    begin
+    end;
+
     procedure RecordIsEmpty(RecordVariant: Variant)
     begin
     end;
