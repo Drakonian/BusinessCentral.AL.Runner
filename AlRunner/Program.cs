@@ -28,12 +28,14 @@ if (args.Length == 0)
     Console.Error.WriteLine("       dotnet run --project AlRunner -- --dump-csharp <file.al>");
     Console.Error.WriteLine("       dotnet run --project AlRunner -- --dump-rewritten <file.al>");
     Console.Error.WriteLine("       dotnet run --project AlRunner -- --packages <dir> [--packages <dir2>] <inputs...>");
+    Console.Error.WriteLine("       dotnet run --project AlRunner -- --coverage <src-dir> <test-dir>");
     return 1;
 }
 
 // Parse arguments
 bool dumpCSharp = false;
 bool dumpRewritten = false;
+bool showCoverage = false;
 var alSources = new List<string>();
 var packagePaths = new List<string>();
 var inputPaths = new List<string>(); // track input dirs/files for auto-discovery
@@ -51,6 +53,10 @@ while (argIdx < args.Length)
             break;
         case "--dump-rewritten":
             dumpRewritten = true;
+            argIdx++;
+            break;
+        case "--coverage":
+            showCoverage = true;
             argIdx++;
             break;
         case "--packages":
@@ -394,17 +400,25 @@ if (assembly == null)
 // Set current assembly for cross-codeunit calls
 AlRunner.Runtime.MockCodeunitHandle.CurrentAssembly = assembly;
 
+// Register total statement count for coverage tracking
+Executor.RegisterStatements(rewrittenList);
+
 // Auto-detect test codeunits: check if any AL source contains "Subtype = Test"
 bool hasTests = alSources.Any(s => s.Contains("Subtype = Test"));
 
+int exitCode;
 if (hasTests)
 {
-    return Executor.RunTests(assembly);
+    exitCode = Executor.RunTests(assembly);
+    if (showCoverage)
+        Executor.PrintCoverageReport();
 }
 else
 {
-    return Executor.RunOnRun(assembly);
+    exitCode = Executor.RunOnRun(assembly);
 }
+
+return exitCode;
 
 // ===========================================================================
 // AL Transpiler: AL source -> C# source string (supports multi-object)
@@ -1145,6 +1159,80 @@ public static class RoslynCompiler
 // ===========================================================================
 public static class Executor
 {
+    /// <summary>
+    /// Scan rewritten C# sources for StmtHit(N) and CStmtHit(N) call sites
+    /// to register total statement count for coverage tracking.
+    /// </summary>
+    public static void RegisterStatements(List<(string Name, string Code)> rewrittenSources)
+    {
+        var stmtPattern = new System.Text.RegularExpressions.Regex(
+            @"\b(?:StmtHit|CStmtHit)\((\d+)\)");
+        var classPattern = new System.Text.RegularExpressions.Regex(
+            @"class\s+(\w+_Scope_\w+)");
+
+        foreach (var (name, code) in rewrittenSources)
+        {
+            string? currentScope = null;
+            foreach (var line in code.Split('\n'))
+            {
+                var classMatch = classPattern.Match(line);
+                if (classMatch.Success)
+                    currentScope = classMatch.Groups[1].Value;
+
+                if (currentScope == null) continue;
+
+                foreach (System.Text.RegularExpressions.Match m in stmtPattern.Matches(line))
+                {
+                    var id = int.Parse(m.Groups[1].Value);
+                    AlRunner.Runtime.AlScope.RegisterStatement(currentScope, id);
+                }
+            }
+        }
+    }
+
+    /// <summary>Print coverage report showing per-codeunit and overall coverage.</summary>
+    public static void PrintCoverageReport()
+    {
+        var (hit, total) = AlRunner.Runtime.AlScope.GetOverallCoverage();
+        if (total == 0)
+        {
+            Console.WriteLine("\nCoverage: no statements tracked");
+            return;
+        }
+
+        var byType = AlRunner.Runtime.AlScope.GetCoverageByType();
+
+        // Group scope classes by parent codeunit for readable output
+        // Scope names: ApplyDiscount_Scope_123456 -> belongs to parent codeunit class
+        Console.WriteLine();
+        Console.WriteLine("Coverage:");
+
+        // Map scope names to readable names (strip _Scope_NNNN suffix)
+        foreach (var (typeName, typeHit, typeTotal) in byType)
+        {
+            // Skip test scope classes — only show coverage for code under test
+            if (typeName.StartsWith("Test", StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            var displayName = typeName;
+            var scopeIdx = typeName.IndexOf("_Scope_");
+            if (scopeIdx > 0)
+                displayName = typeName.Substring(0, scopeIdx);
+
+            var pct = typeTotal > 0 ? (typeHit * 100 / typeTotal) : 0;
+            Console.WriteLine($"  {displayName,-40} {typeHit,3}/{typeTotal,-3} statements ({pct}%)");
+        }
+
+        // Overall (excluding test scopes)
+        var nonTestHit = byType.Where(b => !b.TypeName.StartsWith("Test", StringComparison.OrdinalIgnoreCase)).Sum(b => b.Hit);
+        var nonTestTotal = byType.Where(b => !b.TypeName.StartsWith("Test", StringComparison.OrdinalIgnoreCase)).Sum(b => b.Total);
+        if (nonTestTotal > 0)
+        {
+            var overallPct = nonTestHit * 100 / nonTestTotal;
+            Console.WriteLine($"  {"TOTAL",-40} {nonTestHit,3}/{nonTestTotal,-3} statements ({overallPct}%)");
+        }
+    }
+
     public static int RunTests(Assembly assembly)
     {
         // Find test methods using [NavTest] attribute on the parent method,

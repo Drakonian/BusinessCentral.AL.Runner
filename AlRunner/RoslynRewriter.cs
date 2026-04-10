@@ -18,8 +18,8 @@ public class RoslynRewriter : CSharpSyntaxRewriter
         "NavCaption",
         "NavName",
         // "NavTest" — kept for test method discovery by the executor
+        // "SourceSpans" — kept for coverage line mapping
         "SignatureSpan",
-        "SourceSpans",
         "ReturnValue",
         "NavObjectId",
         "NavByReferenceAttribute",
@@ -938,21 +938,12 @@ public NavValue ALGetRangeMaxSafe(int fieldNo, NavType expectedType) => Rec.ALGe
     // -----------------------------------------------------------------------
     public override SyntaxNode? VisitInvocationExpression(InvocationExpressionSyntax node)
     {
-        // Check for StmtHit(N) and CStmtHit(N) BEFORE recursing into children
-        if (node.Expression is IdentifierNameSyntax stmtIdent)
+        // Keep StmtHit(N) and CStmtHit(N) calls for coverage tracking.
+        // They call through to AlScope which tracks hit statements.
+        if (node.Expression is IdentifierNameSyntax stmtIdent &&
+            (stmtIdent.Identifier.Text == "StmtHit" || stmtIdent.Identifier.Text == "CStmtHit"))
         {
-            if (stmtIdent.Identifier.Text == "StmtHit")
-            {
-                // Will be removed at statement level (VisitExpressionStatement)
-                // But if encountered as expression, return as-is for now
-                return base.VisitInvocationExpression(node);
-            }
-
-            if (stmtIdent.Identifier.Text == "CStmtHit")
-            {
-                // Replace CStmtHit(N) with true
-                return SyntaxFactory.LiteralExpression(SyntaxKind.TrueLiteralExpression);
-            }
+            return base.VisitInvocationExpression(node);
         }
 
         // Now recurse into children first
@@ -1517,14 +1508,9 @@ public NavValue ALGetRangeMaxSafe(int fieldNo, NavType expectedType) => Rec.ALGe
     // -----------------------------------------------------------------------
     public override SyntaxNode? VisitExpressionStatement(ExpressionStatementSyntax node)
     {
-        // Remove StmtHit(N); statements entirely
+        // Keep StmtHit(N) calls for coverage tracking (they call AlScope.StmtHit)
         if (node.Expression is InvocationExpressionSyntax invocation)
         {
-            if (invocation.Expression is IdentifierNameSyntax ident &&
-                ident.Identifier.Text == "StmtHit")
-            {
-                return null; // remove the statement
-            }
 
             // Remove calls to BC-only methods (ALGetTable, ALClose, RunEvent) that can't work standalone
             if (invocation.Expression is MemberAccessExpressionSyntax stripMa &&
@@ -1559,14 +1545,6 @@ public NavValue ALGetRangeMaxSafe(int fieldNo, NavType expectedType) => Rec.ALGe
             }
         }
 
-        var visited = base.VisitExpressionStatement(node);
-        // After visiting children, CStmtHit(N) becomes `true;` which is not a valid statement
-        if (visited is ExpressionStatementSyntax exprStmt &&
-            exprStmt.Expression is LiteralExpressionSyntax literal &&
-            literal.Kind() == SyntaxKind.TrueLiteralExpression)
-        {
-            return null; // remove the dead statement
-        }
-        return visited;
+        return base.VisitExpressionStatement(node);
     }
 }

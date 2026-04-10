@@ -24,9 +24,58 @@ public class AlScope : IDisposable
 
     public void Dispose() { }
 
-    // Debug coverage stubs - the AL compiler emits these for code coverage tracking
-    protected void StmtHit(int n) { }
-    protected bool CStmtHit(int n) => true;
+    // Coverage tracking — the AL compiler emits StmtHit(N) for each statement
+    // and CStmtHit(N) for conditional branches.
+    private static readonly HashSet<(string Type, int Id)> _hitStatements = new();
+    private static readonly HashSet<(string Type, int Id)> _totalStatements = new();
+
+    protected void StmtHit(int n)
+    {
+        _hitStatements.Add((GetType().Name, n));
+    }
+
+    protected bool CStmtHit(int n)
+    {
+        _hitStatements.Add((GetType().Name, n));
+        return true;
+    }
+
+    /// <summary>Register a statement ID as existing (for total count).</summary>
+    public static void RegisterStatement(string typeName, int id)
+    {
+        _totalStatements.Add((typeName, id));
+    }
+
+    /// <summary>Reset coverage data between test runs (called by Executor).</summary>
+    public static void ResetCoverage()
+    {
+        _hitStatements.Clear();
+        _totalStatements.Clear();
+    }
+
+    /// <summary>Get coverage results: (typeName, hitCount, totalCount) per scope class.</summary>
+    public static List<(string TypeName, int Hit, int Total)> GetCoverageByType()
+    {
+        var allTypes = new HashSet<string>(
+            _totalStatements.Select(s => s.Type)
+                .Concat(_hitStatements.Select(s => s.Type)));
+
+        var result = new List<(string, int, int)>();
+        foreach (var type in allTypes.OrderBy(t => t))
+        {
+            var total = _totalStatements.Count(s => s.Type == type);
+            var hit = _hitStatements.Count(s => s.Type == type);
+            if (total > 0)
+                result.Add((type, hit, total));
+        }
+        return result;
+    }
+
+    /// <summary>Get overall coverage: (hit, total).</summary>
+    public static (int Hit, int Total) GetOverallCoverage()
+    {
+        return (_hitStatements.Count, _totalStatements.Count);
+    }
 
     /// <summary>
     /// AL's asserterror keyword - catches expected errors.
