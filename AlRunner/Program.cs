@@ -35,6 +35,7 @@ if (args.Length == 0 || args.Any(a => a is "-h" or "--help"))
     Console.Error.WriteLine("  --dump-rewritten      Print rewritten C# (after rewriting) and exit");
     Console.Error.WriteLine("  -e '<al code>'        Run inline AL code");
     Console.Error.WriteLine("  -v, --verbose         Show detailed transpilation and compilation output");
+    Console.Error.WriteLine("  --guide               Print test-writing guide for AI coding agents");
     Console.Error.WriteLine("  -h, --help            Show this help");
     Console.Error.WriteLine();
     Console.Error.WriteLine("Examples:");
@@ -44,6 +45,8 @@ if (args.Length == 0 || args.Any(a => a is "-h" or "--help"))
     Console.Error.WriteLine();
     Console.Error.WriteLine("Test codeunits (Subtype = Test) are auto-detected.");
     Console.Error.WriteLine("BC Service Tier DLLs are auto-downloaded on first run.");
+    Console.Error.WriteLine();
+    Console.Error.WriteLine("For AI agents: run `al-runner --guide` for a complete test-writing reference.");
     return args.Length == 0 ? 1 : 0;
 }
 
@@ -72,6 +75,9 @@ while (argIdx < args.Length)
             dumpRewritten = true;
             argIdx++;
             break;
+        case "--guide":
+            PrintGuide();
+            return 0;
         case "--coverage":
             showCoverage = true;
             argIdx++;
@@ -520,6 +526,136 @@ else
 }
 
 return exitCode;
+
+void PrintGuide()
+{
+    Console.WriteLine("""
+## AL Runner Test Guide
+
+Use this guide when writing AL unit tests that run with al-runner — a standalone
+test executor that needs no BC service tier, Docker, SQL Server, or license.
+
+### What al-runner supports
+
+- Pure-logic codeunits (arithmetic, string ops, record CRUD, enums)
+- In-memory table store: Insert, Modify, Get, Delete, FindSet, FindFirst, FindLast, Next
+- SETRANGE / SETFILTER filtering (=, <>, <, <=, >, >=, wildcards, OR via |)
+- Cross-codeunit dispatch (Codeunit.Run, direct codeunit variable calls)
+- AL interfaces for dependency injection
+- `asserterror` blocks + `GetLastErrorText()`
+- Assert codeunit: AreEqual, AreNotEqual, IsTrue, IsFalse, ExpectedError, RecordIsEmpty, etc.
+- Coverage reporting via `--coverage` (statement-level, outputs cobertura.xml)
+
+### What al-runner does NOT support
+
+- Pages, Reports, XMLports — stub them via `--stubs <dir>` or inject via AL interface
+- HTTP / REST calls — inject via AL interface
+- Event subscribers — OnAfterModify, OnAfterInsert, etc. do not fire
+- Confirm() returns true always; StrMenu is not supported
+- RecordRef / FieldRef — stubs compile but do not function
+- BLOB / InStream / OutStream operations
+- Filter groups (FilterGroup)
+
+### Writing a compatible test codeunit
+
+1. Use `Subtype = Test` on the codeunit
+2. Reference `Assert` as `Codeunit Assert` (not `Library Assert`)
+3. Mark each test procedure with `[Test]`
+4. Tests must be self-contained: insert test data, call logic, assert results
+5. Use `asserterror` + `Assert.ExpectedError` for error path testing
+6. For external dependencies (mail, HTTP, pages), define an AL interface and
+   inject a mock implementation in the test
+
+### Handling unsupported dependencies
+
+Use `--stubs <dir>` to provide stub AL files that replace ISV or unsupported objects.
+Each stub declares the same object ID and name but with a simplified body. The runner
+auto-excludes conflicting symbol packages when stubs are loaded.
+
+Example stub for an unsupported codeunit:
+```al
+codeunit 70100 "ISV Integration Mgt."
+{
+    procedure DoSomething(): Boolean
+    begin
+        exit(true);
+    end;
+}
+```
+
+### Example test structure
+
+```al
+table 50100 "My Item"
+{
+    fields
+    {
+        field(1; "No."; Code[20]) { }
+        field(2; "Description"; Text[100]) { }
+        field(3; "Unit Price"; Decimal) { }
+    }
+    keys
+    {
+        key(PK; "No.") { Clustered = true; }
+    }
+}
+
+codeunit 50100 "Price Calculator"
+{
+    procedure CalcDiscount(Price: Decimal; Pct: Decimal): Decimal
+    begin
+        if Pct < 0 then
+            Error('Discount cannot be negative');
+        exit(Price - (Price * Pct / 100));
+    end;
+}
+
+codeunit 50200 "Price Calculator Tests"
+{
+    Subtype = Test;
+
+    var
+        Assert: Codeunit Assert;
+        Calc: Codeunit "Price Calculator";
+
+    [Test]
+    procedure TestCalcDiscount()
+    begin
+        Assert.AreEqual(90, Calc.CalcDiscount(100, 10), 'ten pct off 100');
+        Assert.AreEqual(100, Calc.CalcDiscount(100, 0), 'zero discount');
+    end;
+
+    [Test]
+    procedure TestNegativeDiscountErrors()
+    begin
+        asserterror Calc.CalcDiscount(100, -5);
+        Assert.ExpectedError('Discount cannot be negative');
+    end;
+}
+```
+
+### CLI usage
+
+```
+al-runner ./src ./test                                    # run tests
+al-runner --coverage ./src ./test                         # run with coverage report
+al-runner --packages .alpackages ./src ./test             # with dependency symbols
+al-runner --packages .alpackages --stubs ./stubs ./src ./test  # with stubs
+al-runner -v ./src ./test                                 # verbose output
+al-runner --dump-rewritten ./src ./test                   # inspect generated C#
+```
+
+### Tips for AI agents
+
+- When a test fails with `NotSupportedException`, the codeunit uses an unsupported
+  feature. Create a stub or inject the dependency via an AL interface.
+- Run `al-runner --dump-rewritten` to inspect the generated C# if you need to debug
+  a transpilation issue.
+- al-runner resets all in-memory tables between test methods — no cleanup needed.
+- If al-runner says FAIL, the failure is real. If it says PASS, the direct logic is
+  correct but implicit event side-effects are not tested (run the full BC pipeline).
+""");
+}
 
 // ===========================================================================
 // Log helper: info is verbose-only, warn/error always shown
@@ -1251,16 +1387,96 @@ public static class AlTranspiler
 // ===========================================================================
 public static class RoslynCompiler
 {
+    /// <summary>
+    /// Maps excluded source file paths to the Roslyn errors that caused exclusion.
+    /// Populated during iterative retry so that runtime "not found" errors can
+    /// explain WHY a codeunit or record type was excluded from compilation.
+    /// </summary>
+    public static Dictionary<string, List<string>> ExcludedFiles { get; } = new();
+
+    /// <summary>
+    /// Look up exclusion info for a type name fragment (e.g. "Codeunit74320" or "Record50100").
+    /// First checks file names for a direct match, then checks error messages for references
+    /// to the type, and finally falls back to listing all excluded files if any exist.
+    /// Returns a multi-line explanation or null if no files were excluded.
+    /// </summary>
+    public static string? GetExclusionInfo(string typeNameFragment)
+    {
+        if (ExcludedFiles.Count == 0) return null;
+
+        // 1. Direct match: file name contains the fragment (e.g. "Codeunit74320.cs")
+        var matches = ExcludedFiles
+            .Where(kv => Path.GetFileNameWithoutExtension(kv.Key)
+                .Contains(typeNameFragment, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        // 2. Indirect match: error messages reference the type name
+        if (matches.Count == 0)
+        {
+            matches = ExcludedFiles
+                .Where(kv => kv.Value.Any(err =>
+                    err.Contains(typeNameFragment, StringComparison.OrdinalIgnoreCase)))
+                .ToList();
+        }
+
+        // 3. Fallback: if there are excluded files but no specific match, show all
+        if (matches.Count == 0)
+            matches = ExcludedFiles.ToList();
+
+        var sb = new System.Text.StringBuilder();
+        if (matches.Count <= 5)
+        {
+            foreach (var (file, errors) in matches)
+            {
+                sb.AppendLine($"      {Path.GetFileName(file)} was excluded during compilation.");
+                foreach (var err in errors.Take(3))
+                    sb.AppendLine($"      {err}");
+            }
+        }
+        else
+        {
+            sb.AppendLine($"      {matches.Count} source file(s) were excluded during compilation.");
+            // Show the first few with their errors
+            foreach (var (file, errors) in matches.Take(3))
+            {
+                sb.AppendLine($"      {Path.GetFileName(file)}: {(errors.Count > 0 ? errors[0] : "unknown error")}");
+            }
+            sb.AppendLine($"      ... and {matches.Count - 3} more. Run with -v for full list.");
+        }
+        sb.Append("      Tip: use --stubs to provide stub AL files for unsupported dependencies.");
+        return sb.ToString();
+    }
+
     public static Assembly? Compile(string csharpSource) =>
         Compile(new List<(string Name, string Code)> { ("source", csharpSource) });
 
     public static Assembly? Compile(List<(string Name, string Code)> namedSources)
     {
+        // Clear any exclusion info from previous compilations
+        ExcludedFiles.Clear();
+
         // Use AL object names as file paths for readable Roslyn diagnostics
         // (e.g., "Codeunit50100.cs(45,12): error CS0246" instead of "source_0.cs")
+        // Deduplicate names: different AL object types (Table, Page) can share the same
+        // SymbolName, which would give them identical file paths. The iterative retry
+        // removes files by path, so collisions cause error-free files to be excluded
+        // as collateral damage. Append _2, _3, etc. for duplicates.
+        var nameCount = new Dictionary<string, int>();
         var syntaxTrees = namedSources.Select((src, idx) =>
-            Microsoft.CodeAnalysis.CSharp.CSharpSyntaxTree.ParseText(
-                src.Code, path: $"{src.Name}.cs")).ToList();
+        {
+            var baseName = src.Name;
+            if (nameCount.TryGetValue(baseName, out int count))
+            {
+                nameCount[baseName] = count + 1;
+                baseName = $"{baseName}_{count + 1}";
+            }
+            else
+            {
+                nameCount[baseName] = 1;
+            }
+            return Microsoft.CodeAnalysis.CSharp.CSharpSyntaxTree.ParseText(
+                src.Code, path: $"{baseName}.cs");
+        }).ToList();
 
         var references = new List<Microsoft.CodeAnalysis.MetadataReference>();
 
@@ -1312,27 +1528,59 @@ public static class RoslynCompiler
                 .Where(d => d.Severity == Microsoft.CodeAnalysis.DiagnosticSeverity.Error)
                 .ToList();
             Log.Info($"Roslyn compilation failed ({errors.Count} errors):");
-            foreach (var d in errors.Take(30))
+            foreach (var d in errors)
                 Log.Info($"  {d}");
-
-            // Fallback: try removing syntax trees that contain errors and recompile.
-            // This allows non-test code (Pages, export codeunits) to fail without blocking tests.
-            var errorTreePaths = errors
-                .Select(d => d.Location.SourceTree?.FilePath)
-                .Where(p => p != null)
+            var debugErrorFiles = errors
+                .Select(d => d.Location.SourceTree?.FilePath ?? "<null>")
                 .Distinct()
-                .ToHashSet();
+                .OrderBy(p => p)
+                .ToList();
+            Log.Info($"Errors in {debugErrorFiles.Count} distinct file(s):");
+            foreach (var f in debugErrorFiles)
+                Log.Info($"  - {f}");
 
-            if (errorTreePaths.Count > 0 && errorTreePaths.Count < syntaxTrees.Count)
+            // Iteratively remove error-producing source files and recompile.
+            // Each round only removes files with DIRECT errors, preserving files
+            // that are error-free themselves but were compiled alongside broken ones.
+            var currentTrees = new List<Microsoft.CodeAnalysis.SyntaxTree>(syntaxTrees);
+            var allExcluded = new HashSet<string>();
+
+            for (int round = 1; round <= 5; round++)
             {
-                var cleanTrees = syntaxTrees
+                var errorTreePaths = errors
+                    .Select(d => d.Location.SourceTree?.FilePath)
+                    .Where(p => p != null)
+                    .Distinct()
+                    .ToHashSet();
+
+                if (errorTreePaths.Count == 0 || errorTreePaths.Count >= currentTrees.Count)
+                    break;
+
+                // Record which files are being excluded and why
+                foreach (var p in errorTreePaths)
+                {
+                    allExcluded.Add(p!);
+                    if (!ExcludedFiles.ContainsKey(p!))
+                    {
+                        ExcludedFiles[p!] = errors
+                            .Where(d => d.Location.SourceTree?.FilePath == p)
+                            .Take(3)
+                            .Select(d => d.ToString())
+                            .ToList();
+                    }
+                }
+
+                currentTrees = currentTrees
                     .Where(t => !errorTreePaths.Contains(t.FilePath))
                     .ToList();
-                Log.Info($"Retrying compilation without {syntaxTrees.Count - cleanTrees.Count} error-producing source(s) ({cleanTrees.Count} remaining)...");
+
+                Log.Info($"Retry round {round}: removed {errorTreePaths.Count} file(s), {currentTrees.Count} remaining");
+                foreach (var p in errorTreePaths)
+                    Log.Info($"  - {p}");
 
                 var retryCompilation = Microsoft.CodeAnalysis.CSharp.CSharpCompilation.Create(
                     "AlRunnerGenerated",
-                    cleanTrees,
+                    currentTrees,
                     references,
                     new Microsoft.CodeAnalysis.CSharp.CSharpCompilationOptions(
                         Microsoft.CodeAnalysis.OutputKind.DynamicallyLinkedLibrary)
@@ -1343,21 +1591,18 @@ public static class RoslynCompiler
 
                 if (retryResult.Success)
                 {
-                    Log.Info("Retry succeeded.");
+                    Log.Info($"Compilation succeeded after excluding {allExcluded.Count} file(s).");
                     retryMs.Seek(0, SeekOrigin.Begin);
                     return Assembly.Load(retryMs.ToArray());
                 }
-                else
-                {
-                    var retryErrors = retryResult.Diagnostics
-                        .Where(d => d.Severity == Microsoft.CodeAnalysis.DiagnosticSeverity.Error)
-                        .ToList();
-                    Log.Info($"Retry also failed ({retryErrors.Count} errors):");
-                    foreach (var d in retryErrors.Take(10))
-                        Log.Info($"  {d}");
-                }
+
+                errors = retryResult.Diagnostics
+                    .Where(d => d.Severity == Microsoft.CodeAnalysis.DiagnosticSeverity.Error)
+                    .ToList();
+                Log.Info($"  {errors.Count} error(s) remain");
             }
 
+            Log.Info($"Compilation failed after iterative retry. {allExcluded.Count} file(s) excluded, {errors.Count} error(s) remain.");
             return null;
         }
 
