@@ -23,6 +23,10 @@ codeunit 130 "Assert"
     begin
     end;
 
+    procedure ExpectedErrorCode(ExpectedErrorCode: Text)
+    begin
+    end;
+
     procedure ExpectedErrorCode(ExpectedErrorCode: Text; ExpectedErrorMessage: Text)
     begin
     end;

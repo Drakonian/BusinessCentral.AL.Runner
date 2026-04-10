@@ -236,11 +236,13 @@ public class MockCodeunitHandle
         {
             case 1:
             {
-                // ExpectedError(text) or Fail(text)
+                // ExpectedError(text) or ExpectedErrorCode(code) or Fail(text)
                 var arg0Str = args[0]?.ToString() ?? "";
                 var method1 = FindAssertMethodName(memberId);
                 if (method1 != null && method1.Contains("Fail", StringComparison.OrdinalIgnoreCase))
                     MockAssert.Fail(arg0Str);
+                else if (method1 != null && method1.Contains("ExpectedErrorCode", StringComparison.OrdinalIgnoreCase))
+                    MockAssert.ExpectedErrorCode(arg0Str);
                 else
                     MockAssert.ExpectedError(arg0Str);
                 return null;

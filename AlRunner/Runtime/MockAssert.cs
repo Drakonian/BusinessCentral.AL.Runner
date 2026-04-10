@@ -60,7 +60,21 @@ public static class MockAssert
 
     /// <summary>
     /// Verifies that the last asserterror block captured an error with the expected error code.
-    /// In standalone mode, error codes are not tracked — this checks the error message text.
+    /// In standalone mode, error codes are not tracked, so we just verify that an error occurred.
+    /// Common error codes: 'Dialog' (Error() was called), 'TestField' (TestField failed), etc.
+    /// </summary>
+    public static void ExpectedErrorCode(string expectedErrorCode)
+    {
+        var actual = AlScope.LastErrorText;
+        if (string.IsNullOrEmpty(actual))
+            throw new AssertException(
+                $"Assert.ExpectedErrorCode failed. Expected an error with code: <{expectedErrorCode}>, but no error occurred.");
+    }
+
+    /// <summary>
+    /// Verifies that the last asserterror block captured an error with the expected error code
+    /// and message. In standalone mode, error codes are not tracked — this checks the error
+    /// message text only.
     /// </summary>
     public static void ExpectedErrorCode(string expectedErrorCode, string expectedMessage)
     {
