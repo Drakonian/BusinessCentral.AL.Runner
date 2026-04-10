@@ -11,13 +11,13 @@
     <!-- dotnet tool packaging -->
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>al-runner</ToolCommandName>
-    <PackageId>BusinessCentral.AL.Runner</PackageId>
+    <PackageId>MSDyn365BC.AL.Runner</PackageId>
     <Version>0.1.0</Version>
     <Description>Run Business Central AL unit tests in milliseconds — no BC service tier, no Docker, no SQL Server, no license.</Description>
     <Authors>Stefan Maron</Authors>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <PackageProjectUrl>https://github.com/StefanMaron/BusinessCentral.AL.Runner</PackageProjectUrl>
-    <RepositoryUrl>https://github.com/StefanMaron/BusinessCentral.AL.Runner</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/StefanMaron/MSDyn365BC.AL.Runner</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/StefanMaron/MSDyn365BC.AL.Runner</RepositoryUrl>
     <PackageTags>business-central;al;unit-test;runner</PackageTags>
   </PropertyGroup>
 
