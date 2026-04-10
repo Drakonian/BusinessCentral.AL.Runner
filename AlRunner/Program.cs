@@ -120,7 +120,14 @@ while (argIdx < args.Length)
         case "-e":
             argIdx++;
             if (argIdx >= args.Length) { Console.Error.WriteLine("Error: -e requires an argument"); return 1; }
-            alSources.Add(args[argIdx]);
+            var inlineCode = args[argIdx];
+            // Auto-wrap bare AL statements in a codeunit
+            if (!inlineCode.TrimStart().StartsWith("codeunit", StringComparison.OrdinalIgnoreCase) &&
+                !inlineCode.TrimStart().StartsWith("table", StringComparison.OrdinalIgnoreCase))
+            {
+                inlineCode = $"codeunit 99 __Inline {{ trigger OnRun() begin {inlineCode} end; }}";
+            }
+            alSources.Add(inlineCode);
             argIdx++;
             break;
         default:
