@@ -433,10 +433,9 @@ public class MockRecordHandle
     /// </summary>
     public int ALFilterGroup
     {
-        get => _filterGroup;
+        get => 0;
         set { /* No-op: filter groups not implemented in standalone mode */ }
     }
-    private int _filterGroup;
 
     /// <summary>Method overload for ALFilterGroup(int) call syntax.</summary>
     public void SetALFilterGroup(int groupId)
@@ -1139,10 +1138,9 @@ public class MockRecordHandle
     /// </summary>
     public bool ALMarkedOnly
     {
-        get => _markedOnly;
+        get => false;
         set { /* No-op: record marking not implemented in standalone mode */ }
     }
-    private bool _markedOnly;
 
     /// <summary>
     /// AL SetAutoCalcFields — stub, no-op in standalone mode.

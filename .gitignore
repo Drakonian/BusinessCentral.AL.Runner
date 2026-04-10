@@ -16,7 +16,6 @@ obj/
 packages/
 project.lock.json
 project.fragment.lock.json
-artifacts/
 
 # OS files
 .DS_Store
@@ -36,4 +35,3 @@ artifacts/
 
 # Logs
 *.log
-artifacts/

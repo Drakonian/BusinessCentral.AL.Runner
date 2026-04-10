@@ -89,6 +89,21 @@ public static class MockAssert
         // No-op in standalone mode
     }
 
+    public static void AreNearlyEqual(object? expected, object? actual, object? delta, string message)
+    {
+        var exp = ToDecimal(expected);
+        var act = ToDecimal(actual);
+        var d = ToDecimal(delta);
+        if (Math.Abs(exp - act) > d)
+            throw new AssertException(
+                $"Assert.AreNearlyEqual failed. Expected: <{exp}>, Actual: <{act}>, Delta: <{d}>. {message}");
+    }
+
+    public static void Fail(string message)
+    {
+        throw new AssertException($"Assert.Fail. {message}");
+    }
+
     public static void RecordIsEmpty(MockRecordHandle record)
     {
         if (!record.ALIsEmpty)
@@ -138,6 +153,13 @@ public static class MockAssert
         if (value is MockVariant mv) return FormatValue(mv.Value);
         if (value is NavValue nv) return AlCompat.Format(nv);
         return AlCompat.Format(value);
+    }
+
+    private static decimal ToDecimal(object? value)
+    {
+        if (value == null) return 0m;
+        if (value is MockVariant mv) return ToDecimal(mv.Value);
+        return Convert.ToDecimal(value);
     }
 
     private static bool ToBool(object? value)
