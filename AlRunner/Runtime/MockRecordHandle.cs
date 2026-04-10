@@ -91,6 +91,14 @@ public class MockRecordHandle
     /// </summary>
     public NavRecordId ALRecordId => NavRecordId.Default;
 
+    /// <summary>
+    /// Page extension global variable stubs — page extensions use GetGlobalVariable/SetGlobalVariable
+    /// to read/write page-level boolean flags (e.g., PriceEditable, ProfitEditable).
+    /// In standalone mode, return defaults.
+    /// </summary>
+    public NavValue GetGlobalVariable(int id, NavType type) => DefaultForType(type);
+    public void SetGlobalVariable(int id, NavType type, object value) { }
+
     public void SetFieldValueSafe(int fieldNo, NavType expectedType, NavValue value)
     {
         _fields[fieldNo] = value;

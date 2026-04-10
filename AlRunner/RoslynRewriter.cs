@@ -212,6 +212,7 @@ public class RoslynRewriter : CSharpSyntaxRewriter
         // We need to know the enclosing class name for _parent field type.
         bool isScopeClass = false;
         bool isRecordClass = false;
+        bool isPageExtensionClass = false;
         string? enclosingClassName = null;
         if (node.BaseList != null)
         {
@@ -220,6 +221,8 @@ public class RoslynRewriter : CSharpSyntaxRewriter
                 var typeText = baseType.Type.ToString();
                 if (typeText == "NavRecord" || typeText == "NavRecordExtension")
                     isRecordClass = true;
+                if (typeText == "NavFormExtension")
+                    isPageExtensionClass = true;
                 if (typeText.StartsWith("NavMethodScope<") || typeText.StartsWith("NavTriggerMethodScope<")
                     || typeText.StartsWith("NavEventMethodScope<"))
                 {
@@ -388,6 +391,21 @@ public NavValue ALGetRangeMaxSafe(int fieldNo, NavType expectedType) => Rec.ALGe
             visited = visited.WithMembers(visited.Members.AddRange(delegatingMembers));
         }
 
+        // For page extension classes: inject a ParentObject property returning Rec.
+        // Page extensions reference this.ParentObject (after base.ParentObject is rewritten)
+        // to access the parent record. Without this, page extensions fail compilation and
+        // cascade their exclusion to dependent record types.
+        if (isPageExtensionClass)
+        {
+            var parentObjectCode = @"
+public MockRecordHandle ParentObject => Rec;
+";
+            var pageMembers = CSharpSyntaxTree.ParseText(
+                $"class _Temp_ {{ {parentObjectCode} }}").GetRoot()
+                .DescendantNodes().OfType<ClassDeclarationSyntax>().First().Members;
+            visited = visited.WithMembers(visited.Members.AddRange(pageMembers));
+        }
+
         // Restore previous class name context
         _currentClassName = previousClassName;
 
@@ -455,6 +473,17 @@ public NavValue ALGetRangeMaxSafe(int fieldNo, NavType expectedType) => Rec.ALGe
             }
         }
 
+        // Remove CurrPage and properties that cast to NavForm (page infrastructure).
+        if (member is PropertyDeclarationSyntax propCheck)
+        {
+            if (propCheck.Identifier.Text == "CurrPage")
+                return true;
+            // Remove properties whose body casts ParentObject to NavForm
+            var propText = propCheck.ToString();
+            if (propText.Contains("(NavForm)"))
+                return true;
+        }
+
         // Remove specific properties
         if (member is PropertyDeclarationSyntax prop)
         {
@@ -480,14 +509,16 @@ public NavValue ALGetRangeMaxSafe(int fieldNo, NavType expectedType) => Rec.ALGe
                 return true;
 
             // private new NavRecord ParentObject => ...;
-            // For table extensions, keep ParentObject — it's rewritten to return Rec
-            // in VisitPropertyDeclaration. For other types (pages, etc.), remove it.
+            // Keep ParentObject for all types that have a Rec property — it's rewritten
+            // to return Rec in VisitPropertyDeclaration. This prevents page extensions
+            // from failing compilation and cascading exclusions to dependent records.
             if (name == "ParentObject")
             {
                 var className = parentClass.Identifier.Text;
-                if (className.StartsWith("TableExtension") || className.StartsWith("Record"))
-                    return false; // keep — will be rewritten
-                return true; // remove for pages, etc.
+                if (className.StartsWith("TableExtension") || className.StartsWith("Record")
+                    || className.StartsWith("PageExtension"))
+                    return false; // keep — will be rewritten to => Rec
+                return true; // remove for codeunits, etc.
             }
             // protected override uint[] IndirectPermissionList => ...;
             if (name == "IndirectPermissionList")
@@ -1539,6 +1570,15 @@ public NavValue ALGetRangeMaxSafe(int fieldNo, NavType expectedType) => Rec.ALGe
         {
             // Replace base.Parent.xxx with _parent.xxx
             return visited.WithExpression(SyntaxFactory.IdentifierName("_parent"));
+        }
+
+        // Pattern: base.ParentObject -> this.ParentObject
+        // Page/table extensions reference base.ParentObject but base class is stripped to object.
+        // ParentObject is rewritten to return Rec, so we just replace base with this.
+        if (visited.Name.Identifier.Text == "ParentObject" &&
+            visited.Expression is BaseExpressionSyntax)
+        {
+            return visited.WithExpression(SyntaxFactory.ThisExpression());
         }
 
         // Pattern: xxx.Target -> xxx (strip .Target accessor on handles)
