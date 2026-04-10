@@ -77,6 +77,7 @@ These are the BC runtime types replaced in standalone mode:
 | `MockArray<T>` | `NavArray<T>` | Generic array without ITreeObject requirement. |
 | `MockRecordArray` | `NavArray<NavRecordHandle>` | Array of MockRecordHandle (Record[] in AL). |
 | `MockInterfaceHandle` | `NavInterfaceHandle` | AL interface dispatch stub. |
+| `MockAssert` | Codeunit 130 "Library Assert" | Assert.AreEqual, AreNotEqual, IsTrue, IsFalse, ExpectedError. |
 | `AlScope.AssertError()` | `asserterror` keyword | Catches expected errors, stores message. |
 | `AlDialog` | `NavDialog` static methods | Message() prints to console; Error() throws Exception. |
 | `MockDialog` | `NavDialog` instance | No-op progress dialog (ALOpen/ALUpdate/ALClose). |
@@ -92,20 +93,14 @@ These are the BC runtime types replaced in standalone mode:
 - Field read/write by field ID (GetFieldValueSafe / SetFieldValueSafe)
 - Cross-record table reset via `ResetAll()` between tests
 
-### Out-of-scope files (flagged with `// OUT OF SCOPE — see CLAUDE.md`)
+### Removed out-of-scope files
 
-These files exist in `Runtime/` but are outside the current scope. Stefan will
-decide whether to keep, promote, or delete them:
+The following have been removed (they were stubs for unsupported features):
 
-- `MockFormHandle.cs` — Page mocking (NavFormHandle). Page interactions (PAGE.RUN,
-  lookups) are not supported in standalone mode.
-- `NavTestPageHandle.cs` — TestPage mocking (NavTestPageHandle). Tests using
-  `TestPage` variables cannot run without a UI runtime.
-- `MockRecordRef.cs` — RecordRef mocking. Field access via NavFieldRef is not
-  functional; the stub satisfies compilation only.
-
-The `RegexRewriter` class at the bottom of `Program.cs` is also marked
-OUT OF SCOPE — it is dead code superseded by `RoslynRewriter`.
+- `MockFormHandle.cs` — Page mocking (not supported in standalone mode)
+- `NavTestPageHandle.cs` — TestPage mocking (not supported)
+- `MockRecordRef.cs` — RecordRef mocking (not supported)
+- `RegexRewriter` class — dead code superseded by `RoslynRewriter`
 
 ---
 
@@ -153,23 +148,31 @@ end
 
 ---
 
-## Missing Pieces (needed for real-world use, not yet built)
+## Implemented Features (previously listed as missing)
 
-These are gaps that must be addressed before al-runner is useful on real app test
-suites:
+These have been implemented and are tested by the samples:
 
-1. **Assert codeunit mock** — `Assert.AreEqual`, `Assert.IsTrue`, `Assert.IsFalse`,
-   `Assert.ExpectedError`, `Assert.AreNotEqual` are not implemented. Most real BC
-   tests use this codeunit. Without it, nearly all real test suites will fail.
+1. **Assert codeunit mock** (`Runtime/MockAssert.cs`) — `Assert.AreEqual`,
+   `Assert.AreNotEqual`, `Assert.IsTrue`, `Assert.IsFalse`, `Assert.ExpectedError`,
+   `Assert.ExpectedErrorCode`. Wired into `MockCodeunitHandle` so calls to
+   codeunit 130 (Library Assert) route to `MockAssert`. An AL stub
+   (`stubs/LibraryAssert.al`) is auto-loaded so test code compiles without
+   requiring the real Assert .app.
 
-2. **Composite primary key support in MockRecordHandle** — `ALGet` only supports
-   single-field primary keys. Real tables often have multi-field keys.
+2. **Composite primary key support** — `ALGet`, `ALModify`, `ALDelete`, `ALRename`
+   use all PK fields registered via `MockRecordHandle.RegisterPrimaryKey()`.
+   Falls back to field 1 when no PK is registered.
 
-3. **Sort ordering in GetFilteredRecords** — `ALSetCurrentKey` / `ALSetAscending`
-   are stored but not applied during `FindSet`. Results are returned in insertion order.
+3. **Sort ordering** — `ALSetCurrentKey` / `ALSetAscending` are applied in
+   `GetFilteredRecords()`. `ALFind("+")` returns the record with the largest
+   key value.
 
-4. **ALFieldNo(fieldName) returns 0** — Field-by-name lookups are not supported.
-   Code that resolves field numbers by name at runtime will silently get 0.
+4. **ALFieldNo(fieldName)** — Field-by-name lookups work when registered via
+   `MockRecordHandle.RegisterFieldName()`.
+
+## Remaining Gaps
+
+These are gaps that remain for full production use:
 
 ---
 
@@ -298,11 +301,18 @@ Follows the `BusinessCentral.AL.*` pattern:
 | `AlRunner/Runtime/MockArray.cs` | AL Array type replacement |
 | `AlRunner/Runtime/MockRecordArray.cs` | AL Record array replacement |
 | `AlRunner/Runtime/MockInterfaceHandle.cs` | AL Interface dispatch stub |
-| `AlRunner/Runtime/MockFormHandle.cs` | OUT OF SCOPE: Page runtime mock |
-| `AlRunner/Runtime/NavTestPageHandle.cs` | OUT OF SCOPE: TestPage mock |
-| `AlRunner/Runtime/MockRecordRef.cs` | OUT OF SCOPE: RecordRef mock |
+| `AlRunner/Runtime/MockAssert.cs` | Assert codeunit mock (AreEqual, ExpectedError, etc.) |
+| `AlRunner/stubs/LibraryAssert.al` | AL stub for codeunit 130 (auto-loaded for compilation) |
 | `samples/hello.al` | Minimal sample: table + codeunit + Message |
 | `samples/calc.al` | Minimal sample: arithmetic in OnRun |
+| `samples/01-pure-function/` | Pure calculation tests with Assert.AreEqual |
+| `samples/02-record-operations/` | Record CRUD, filtering, composite PKs |
+| `samples/03-interface-injection/` | AL interface dependency injection |
+| `samples/04-asserterror/` | asserterror + Assert.ExpectedError |
+| `samples/05-known-limitation/` | Silent false positive documentation |
+| `samples/06-intentional-failure/` | Deliberately broken tests for error output demo |
+| `.github/workflows/samples-pass.yml` | CI: runs samples 01-05 (should pass) |
+| `.github/workflows/samples-fail.yml` | CI: runs sample 06 (expected to fail) |
 | `al-runner.json` | Sample config file (not yet wired into CLI) |
 
 ---
@@ -313,8 +323,8 @@ When resuming work on this repo as an agent, you do NOT need to re-read the
 alDirectCompile repo. Everything needed is in this CLAUDE.md and the source files.
 
 Priority order for next work:
-1. Implement the Assert codeunit mock (highest impact for real-world use)
-2. Add composite primary key support to MockRecordHandle
-3. Wire al-runner.json config into the CLI
-4. Apply sort ordering in GetFilteredRecords
-5. Implement ALFieldNo(fieldName) lookup
+1. Wire al-runner.json config into the CLI
+2. Implement filter groups (FilterGroup)
+3. Implement ALGetFilter to return actual filter expressions
+4. Add more Assert methods (AreNearlyEqual, Fail, etc.)
+5. Improve PK auto-detection from generated C# metadata

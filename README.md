@@ -1,5 +1,8 @@
 # BusinessCentral.AL.Runner
 
+[![Samples (passing)](https://github.com/StefanMaron/BusinessCentral.AL.Runner/actions/workflows/samples-pass.yml/badge.svg)](https://github.com/StefanMaron/BusinessCentral.AL.Runner/actions/workflows/samples-pass.yml)
+[![Samples (expected failure)](https://github.com/StefanMaron/BusinessCentral.AL.Runner/actions/workflows/samples-fail.yml/badge.svg)](https://github.com/StefanMaron/BusinessCentral.AL.Runner/actions/workflows/samples-fail.yml)
+
 Run Business Central AL unit tests in **milliseconds** — no BC service tier, no Docker, no SQL Server, no license required.
 
 ## What It Is
@@ -70,12 +73,11 @@ The codeunit's direct logic is correct. Note: if the test implicitly depends on 
 
 ## What's Missing
 
-These gaps must be addressed before al-runner is useful on real app test suites:
+Known gaps for real-world use:
 
-1. **Assert codeunit mock** — `Assert.AreEqual`, `Assert.IsTrue`, `Assert.ExpectedError`, etc. are not implemented. Most real BC tests use this codeunit.
-2. **Composite primary key support** — `ALGet` only supports single-field primary keys.
-3. **Sort ordering** — `ALSetCurrentKey` / `ALSetAscending` are stored but not applied; results return in insertion order.
-4. **ALFieldNo(fieldName)** — field-by-name lookup always returns 0.
+1. **Implicit event publishers on DB operations** — `OnAfterModify`, `OnAfterInsert`, etc. do NOT fire. Tests that depend on event subscribers will produce silent false positives (see sample 05).
+2. **Page, Report, XMLPort** — not supported. Inject via AL interface or exclude from runner.
+3. **HTTP** — not supported. Inject via AL interface.
 
 ## Developer Contract
 
@@ -166,9 +168,25 @@ The full BC service tier pipeline:
 
 ## Samples
 
-See the `samples/` directory:
-- `hello.al` — table + codeunit + Message
-- `calc.al` — decimal arithmetic in OnRun
+Each sample is a self-contained AL project with source, tests, and config:
+
+| Sample | What it demonstrates |
+|---|---|
+| `samples/hello.al` | Minimal: table + codeunit + Message |
+| `samples/calc.al` | Minimal: decimal arithmetic in OnRun |
+| `samples/01-pure-function/` | Pure calculation logic, Assert.AreEqual |
+| `samples/02-record-operations/` | Record CRUD, SETRANGE filtering, composite PKs |
+| `samples/03-interface-injection/` | AL interface for dependency injection |
+| `samples/04-asserterror/` | Error validation with asserterror + Assert.ExpectedError |
+| `samples/05-known-limitation/` | Silent false positive from missing event subscriber |
+| `samples/06-intentional-failure/` | Deliberately broken tests for error output demo |
+
+## CI Pipelines
+
+Two GitHub Actions workflows run on every push:
+
+- **Samples (passing)** — runs samples 01–05, expected to pass. Green badge means the runner works.
+- **Samples (expected failure)** — runs sample 06, expected to fail. This is intentional. Click the red badge to see exactly what test failure output looks like before deciding to adopt the tool. The failing tests demonstrate `Assert.AreEqual` and `Assert.ExpectedError` error formatting.
 
 ## Naming
 

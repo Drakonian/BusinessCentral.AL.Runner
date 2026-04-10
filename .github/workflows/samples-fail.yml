@@ -1,0 +1,37 @@
+# This pipeline is EXPECTED TO FAIL — it demonstrates error reporting.
+# The sample 06-intentional-failure contains deliberately broken tests
+# to show what AL Runner's test failure output looks like.
+# Click through to the workflow run to see the error output format.
+
+name: Samples (expected failure)
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main]
+
+jobs:
+  expected-failure:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Install AL compiler
+        run: dotnet tool install --global microsoft.dynamics.businesscentral.development.tools.linux
+
+      - name: Download BC Service Tier artifacts
+        run: |
+          mkdir -p artifacts/onprem/27.5.46862.0/platform/ServiceTier/PFiles64/Microsoft\ Dynamics\ NAV/270/Service
+          echo "BC artifacts setup required — see README for instructions"
+
+      - name: Build
+        run: dotnet build AlRunner/
+
+      - name: "Sample 06: Intentional failure (EXPECTED TO FAIL)"
+        run: dotnet run --project AlRunner -- samples/06-intentional-failure/src samples/06-intentional-failure/test

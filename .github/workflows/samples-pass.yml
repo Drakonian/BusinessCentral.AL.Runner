@@ -1,0 +1,47 @@
+name: Samples (passing)
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main]
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Install AL compiler
+        run: dotnet tool install --global microsoft.dynamics.businesscentral.development.tools.linux
+
+      - name: Download BC Service Tier artifacts
+        run: |
+          mkdir -p artifacts/onprem/27.5.46862.0/platform/ServiceTier/PFiles64/Microsoft\ Dynamics\ NAV/270/Service
+          # In CI, artifacts must be downloaded or cached.
+          # For now, this workflow requires the artifacts to be available.
+          # See https://github.com/StefanMaron/MsDyn365Bc.On.Linux for setup.
+          echo "BC artifacts setup required — see README for instructions"
+
+      - name: Build
+        run: dotnet build AlRunner/
+
+      - name: "Sample 01: Pure function tests"
+        run: dotnet run --project AlRunner -- samples/01-pure-function/src samples/01-pure-function/test
+
+      - name: "Sample 02: Record operations tests"
+        run: dotnet run --project AlRunner -- samples/02-record-operations/src samples/02-record-operations/test
+
+      - name: "Sample 03: Interface injection tests"
+        run: dotnet run --project AlRunner -- samples/03-interface-injection/src samples/03-interface-injection/test
+
+      - name: "Sample 04: asserterror tests"
+        run: dotnet run --project AlRunner -- samples/04-asserterror/src samples/04-asserterror/test
+
+      - name: "Sample 05: Known limitation tests"
+        run: dotnet run --project AlRunner -- samples/05-known-limitation/src samples/05-known-limitation/test
