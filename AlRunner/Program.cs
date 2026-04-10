@@ -280,19 +280,56 @@ Kernel32Shim.EnsureRegistered();
 // These provide AL declarations for runtime-mocked codeunits so user code compiles.
 // ---------------------------------------------------------------------------
 {
-    var stubsDir = Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "stubs");
-    if (!Directory.Exists(stubsDir))
-        stubsDir = Path.Combine(AppContext.BaseDirectory, "stubs");
-    if (Directory.Exists(stubsDir))
+    // Skip stubs if the packages already contain the real Assert codeunit
+    bool packagesHaveAssert = packagePaths.Any(p =>
+        Directory.Exists(p) &&
+        Directory.GetFiles(p, "*.app", SearchOption.AllDirectories)
+            .Any(f => Path.GetFileName(f).Contains("Assert", StringComparison.OrdinalIgnoreCase) ||
+                       Path.GetFileName(f).Contains("TestLibraries", StringComparison.OrdinalIgnoreCase)));
+    // Also check .alpackages directories discovered from input paths
+    if (!packagesHaveAssert)
     {
-        foreach (var stubFile in Directory.GetFiles(stubsDir, "*.al", SearchOption.TopDirectoryOnly).OrderBy(f => f))
+        foreach (var ip in inputPaths)
         {
-            var src = File.ReadAllText(stubFile);
-            alSources.Add(src);
-            // Add stubs to every input group so they're available in all compilations
-            foreach (var group in inputGroups)
-                group.Sources.Add(src);
+            var dir = Directory.Exists(ip) ? ip : Path.GetDirectoryName(ip);
+            while (dir != null)
+            {
+                var alPkgs = Path.Combine(dir, ".alpackages");
+                if (Directory.Exists(alPkgs) &&
+                    Directory.GetFiles(alPkgs, "*.app", SearchOption.AllDirectories)
+                        .Any(f => Path.GetFileName(f).Contains("Assert", StringComparison.OrdinalIgnoreCase)))
+                {
+                    packagesHaveAssert = true;
+                    break;
+                }
+                var parent = Path.GetDirectoryName(dir);
+                if (parent == dir) break;
+                dir = parent;
+            }
+            if (packagesHaveAssert) break;
         }
+    }
+
+    if (!packagesHaveAssert)
+    {
+        var stubsDir = Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "stubs");
+        if (!Directory.Exists(stubsDir))
+            stubsDir = Path.Combine(AppContext.BaseDirectory, "stubs");
+        if (Directory.Exists(stubsDir))
+        {
+            Log.Info("Loading Assert stubs (no Assert.app found in packages)");
+            foreach (var stubFile in Directory.GetFiles(stubsDir, "*.al", SearchOption.TopDirectoryOnly).OrderBy(f => f))
+            {
+                var src = File.ReadAllText(stubFile);
+                alSources.Add(src);
+                foreach (var group in inputGroups)
+                    group.Sources.Add(src);
+            }
+        }
+    }
+    else
+    {
+        Log.Info("Skipping Assert stubs (real Assert.app found in packages)");
     }
 }
 
@@ -700,7 +737,7 @@ public static class AlTranspiler
             {
                 Log.Info($"AL compiler warnings ({warnings.Count}):");
                 foreach (var d in warnings.Take(10))
-                    Console.Error.WriteLine($"  {d.Id}: {d.GetMessage()}");
+                    Log.Info($"  {d.Id}: {d.GetMessage()}");
             }
         }
 
