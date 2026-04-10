@@ -26,23 +26,27 @@ jobs:
         run: dotnet tool install --global microsoft.dynamics.businesscentral.development.tools.linux --version 16.2.28.57946
 
       - name: Download BC Service Tier artifacts
+        shell: bash
         run: |
-          # Download BC platform artifacts for the service tier DLLs.
-          # These are required for Roslyn compilation of the rewritten C#.
+          set +e  # Don't fail on non-zero exit codes (unzip returns 1 for warnings)
           ARTIFACT_URL="https://bcartifacts-exdbf9fwegejdqak.b02.azurefd.net/onprem/${BC_ARTIFACT_VERSION}/platform"
           ARTIFACT_DIR="artifacts/onprem/${BC_ARTIFACT_VERSION}/platform"
           mkdir -p "${ARTIFACT_DIR}"
 
           echo "Downloading BC platform artifact..."
-          curl -sSL -o /tmp/platform.zip "${ARTIFACT_URL}" || {
+          curl -sSL -o /tmp/platform.zip "${ARTIFACT_URL}"
+          if [ $? -ne 0 ]; then
             echo "::warning::Could not download BC artifacts from ${ARTIFACT_URL}"
             echo "BC_ARTIFACTS_AVAILABLE=false" >> $GITHUB_ENV
             exit 0
-          }
+          fi
 
           echo "Extracting service tier DLLs..."
-          unzip -q /tmp/platform.zip -d /tmp/platform
-          SERVICE_TIER_SRC=$(find /tmp/platform -path "*/ServiceTier/program files*" -name "Microsoft.Dynamics.Nav.Types.dll" -exec dirname {} \; | head -1)
+          unzip -q -o /tmp/platform.zip -d /tmp/platform
+          # unzip may return 1 for warnings (backslash paths), that's OK
+
+          # Find the Service Tier DLLs (case-insensitive path search)
+          SERVICE_TIER_SRC=$(find /tmp/platform -iname "Microsoft.Dynamics.Nav.Types.dll" -exec dirname {} \; | head -1)
           if [ -z "$SERVICE_TIER_SRC" ]; then
             echo "::warning::Service tier DLLs not found in artifact"
             echo "BC_ARTIFACTS_AVAILABLE=false" >> $GITHUB_ENV
@@ -53,7 +57,7 @@ jobs:
           mkdir -p "${TARGET_DIR}"
           cp "${SERVICE_TIER_SRC}"/*.dll "${TARGET_DIR}/"
           echo "BC_ARTIFACTS_AVAILABLE=true" >> $GITHUB_ENV
-          echo "Extracted service tier DLLs to ${TARGET_DIR}"
+          echo "Extracted $(ls "${TARGET_DIR}"/*.dll | wc -l) DLLs to ${TARGET_DIR}"
           rm -rf /tmp/platform /tmp/platform.zip
 
       - name: Build
