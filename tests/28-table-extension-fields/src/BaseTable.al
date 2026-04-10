@@ -1,4 +1,4 @@
-table 50100 "Base Table"
+table 52800 "Base Table"
 {
     DataClassification = CustomerContent;
 

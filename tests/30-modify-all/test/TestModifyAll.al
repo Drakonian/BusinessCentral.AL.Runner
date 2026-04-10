@@ -1,4 +1,4 @@
-codeunit 50110 "Test Modify All"
+codeunit 53000 "Test Modify All"
 {
     Subtype = Test;
 

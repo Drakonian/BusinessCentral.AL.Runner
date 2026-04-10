@@ -1,4 +1,4 @@
-table 50100 "RecId Table"
+table 52900 "RecId Table"
 {
     DataClassification = CustomerContent;
 

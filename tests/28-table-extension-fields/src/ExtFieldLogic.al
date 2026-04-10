@@ -1,4 +1,4 @@
-codeunit 50100 "Ext Field Logic"
+codeunit 52801 "Ext Field Logic"
 {
     procedure DoubleCustomAmount(var Rec: Record "Base Table"): Decimal
     begin

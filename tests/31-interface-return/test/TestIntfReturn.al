@@ -1,4 +1,4 @@
-codeunit 50110 "Test Interface Return"
+codeunit 53100 "Test Interface Return"
 {
     Subtype = Test;
 

@@ -425,41 +425,9 @@ Follows the `BusinessCentral.AL.*` pattern:
 | `AlRunner/Runtime/MockIsolatedStorage.cs` | In-memory IsolatedStorage mock |
 | `AlRunner/Runtime/MockTextBuilder.cs` | In-memory TextBuilder mock |
 | `AlRunner/stubs/LibraryAssert.al` | AL stub for codeunit 130 (auto-loaded for compilation) |
-| `tests/01-pure-function/` | Pure calculation tests with Assert.AreEqual |
-| `tests/02-record-operations/` | Record CRUD, filtering |
-| `tests/03-interface-injection/` | AL interface dependency injection |
-| `tests/04-asserterror/` | asserterror + Assert.ExpectedError |
-| `tests/05-known-limitation/` | Silent false positive documentation |
-| `tests/06-intentional-failure/` | Deliberately broken tests for error output demo |
-| `tests/07-composite-pk/` | Composite (multi-field) primary keys |
-| `tests/08-sort-ordering/` | SetCurrentKey / SetAscending sort ordering |
-| `tests/09-setfilter-expressions/` | Complex SETFILTER expressions |
-| `tests/10-cross-codeunit/` | Cross-codeunit dispatch |
-| `tests/11-variant-type/` | AL Variant type |
-| `tests/12-format-string/` | Format() and Evaluate() |
-| `tests/13-partial-compile/` | Partial compilation (skips unsupported types) |
-| `tests/14-assert-130000/` | Assert codeunit with alternate ID |
-| `tests/15-codeunit-assign/` | Codeunit variable assignment |
-| `tests/16-isolated-storage/` | IsolatedStorage operations |
-| `tests/17-text-builder/` | TextBuilder operations |
-| `tests/18-validate-trigger/` | OnValidate triggers |
-| `tests/19-table-procedures/` | Table procedures |
-| `tests/20-option-fields/` | Option/Enum fields |
-| `tests/21-expected-error-substring/` | ExpectedError substring matching |
-| `tests/22-record-persistence/` | Record persistence across calls |
-| `tests/23-error-line-mapping/` | Error line mapping in test output |
-| `tests/24-secret-text/` | SecretText + IsolatedStorage + ALCompiler.ToSecretText |
-| `tests/25-expected-error-code/` | Assert.ExpectedErrorCode (1-arg) |
-| `tests/26-time-format/` | NavTime comparison and formatting |
-| `tests/27-testfield-error/` | Assert.ExpectedTestFieldError |
-| `tests/28-table-extension-fields/` | Table extension field read/write |
-| `tests/29-record-id/` | RecordId property access |
-| `tests/30-modify-all/` | ModifyAll with filters |
-| `tests/31-interface-return/` | Interface returned from functions |
+| `tests/NN-name/` | Test suites (self-documenting: `src/*.al` + `test/*.al`). Run `ls tests/` to discover. |
 | `.github/workflows/test-matrix.yml` | CI: runs all tests across BC version matrix |
 | `.github/workflows/publish.yml` | CI: publish to NuGet on tag |
-| `.github/workflows/coverage-demo.yml` | CI: coverage report demo |
-| `al-runner.json` | Sample config file (not yet wired into CLI) |
 
 ---
 

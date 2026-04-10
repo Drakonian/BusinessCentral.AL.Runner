@@ -1,4 +1,4 @@
-codeunit 50101 "Calc Factory"
+codeunit 53102 "Calc Factory"
 {
     procedure GetCalculator(): Interface "ICalc"
     var
