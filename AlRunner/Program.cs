@@ -524,11 +524,15 @@ if (dumpRewritten)
 Timer.EndStage("Roslyn rewriting");
 Timer.StartStage("Roslyn compilation");
 // ---------------------------------------------------------------------------
-// Step 3: Build AL source line mapping and compile rewritten C# with Roslyn
+// Step 3: Build AL source line mapping (in parallel) and compile rewritten C#
 // ---------------------------------------------------------------------------
-SourceLineMapper.Build(generatedCSharpList, GetRewrittenStrings());
+// SourceLineMapper needs string form; compilation needs trees.
+// Run them concurrently since they are independent.
+var mapperTask = System.Threading.Tasks.Task.Run(() =>
+    SourceLineMapper.Build(generatedCSharpList, GetRewrittenStrings()));
 var preloadedRefs = refsTask.Result;
 var assembly = RoslynCompiler.Compile(rewrittenTreeList, preloadedRefs);
+mapperTask.Wait(); // Ensure mapper finishes before we use diagnostics
 if (assembly == null)
 {
     // Dump rewritten C# for debugging if verbose
