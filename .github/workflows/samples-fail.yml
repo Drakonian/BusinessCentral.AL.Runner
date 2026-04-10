@@ -46,6 +46,7 @@ jobs:
           fi
 
           unzip -q -o /tmp/platform.zip -d /tmp/platform
+          chmod -R +rX /tmp/platform
 
           SERVICE_TIER_SRC=$(find /tmp/platform -iname "Microsoft.Dynamics.Nav.Types.dll" -exec dirname {} \; | head -1)
           if [ -z "$SERVICE_TIER_SRC" ]; then

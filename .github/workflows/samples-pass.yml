@@ -44,6 +44,8 @@ jobs:
           echo "Extracting service tier DLLs..."
           unzip -q -o /tmp/platform.zip -d /tmp/platform
           # unzip may return 1 for warnings (backslash paths), that's OK
+          # Fix permissions — BC artifacts have restrictive Windows-style perms
+          chmod -R +rX /tmp/platform
 
           # Find the Service Tier DLLs (case-insensitive path search)
           SERVICE_TIER_SRC=$(find /tmp/platform -iname "Microsoft.Dynamics.Nav.Types.dll" -exec dirname {} \; | head -1)
