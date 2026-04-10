@@ -57,8 +57,8 @@ public class MockCodeunitHandle
     /// </summary>
     public object? Invoke(int memberId, object[] args)
     {
-        // Route codeunit 130 (Library Assert) to MockAssert
-        if (_codeunitId == 130)
+        // Route codeunit 130 (Library Assert) and 130000 (Assert from BC test toolkit) to MockAssert
+        if (_codeunitId is 130 or 130000)
             return InvokeAssert(memberId, args);
 
         var assembly = CurrentAssembly ?? Assembly.GetExecutingAssembly();
