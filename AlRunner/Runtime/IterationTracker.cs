@@ -14,14 +14,27 @@ public static class IterationTracker
     private static readonly Stack<ActiveLoop> _loopStack = new();
     private static int _nextLoopId;
 
+    private static List<int> _currentIterationHits = new();
+
     public static bool Enabled => _enabled;
     public static void Enable() => _enabled = true;
     public static void Disable() => _enabled = false;
+
+    /// <summary>
+    /// Called by StmtHit/CStmtHit on every execution — records which statements
+    /// run during the current iteration (not just new unique hits).
+    /// </summary>
+    public static void RecordHit(int stmtId)
+    {
+        if (!_enabled || _loopStack.Count == 0) return;
+        _currentIterationHits.Add(stmtId);
+    }
 
     public static void Reset()
     {
         _loops.Clear();
         _loopStack.Clear();
+        _currentIterationHits.Clear();
         _nextLoopId = 0;
     }
 
@@ -62,7 +75,7 @@ public static class IterationTracker
         active.CurrentIteration++;
         active.ValueSnapshotBefore = ValueCapture.GetCaptures().Count;
         active.MessageSnapshotBefore = MessageCapture.GetMessages().Count;
-        active.HitStatementsBefore = AlScope.GetHitStatements();
+        _currentIterationHits.Clear();
     }
 
     public static void EndIteration(int loopId)
@@ -87,14 +100,8 @@ public static class IterationTracker
         for (int i = active.MessageSnapshotBefore; i < allMessages.Count; i++)
             iterMessages.Add(allMessages[i]);
 
-        // Lines hit during this iteration (new hits since snapshot)
-        var currentHits = AlScope.GetHitStatements();
-        var iterLines = new List<int>();
-        foreach (var hit in currentHits)
-        {
-            if (active.HitStatementsBefore == null || !active.HitStatementsBefore.Contains(hit))
-                iterLines.Add(hit.Id);
-        }
+        // Lines hit during this iteration (collected via RecordHit from StmtHit/CStmtHit)
+        var iterLines = _currentIterationHits.Distinct().ToList();
 
         active.Record.Steps.Add(new IterationStep
         {
@@ -151,6 +158,5 @@ public static class IterationTracker
         public int CurrentIteration { get; set; }
         public int ValueSnapshotBefore { get; set; }
         public int MessageSnapshotBefore { get; set; }
-        public HashSet<(string Type, int Id)>? HitStatementsBefore { get; set; }
     }
 }

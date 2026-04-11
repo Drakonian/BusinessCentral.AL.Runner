@@ -43,12 +43,14 @@ public class AlScope : IDisposable
     {
         _hitStatements.Add((GetType().Name, n));
         _lastStatementHit = (GetType().Name, n);
+        IterationTracker.RecordHit(n);
     }
 
     protected bool CStmtHit(int n)
     {
         _hitStatements.Add((GetType().Name, n));
         _lastStatementHit = (GetType().Name, n);
+        IterationTracker.RecordHit(n);
         return true;
     }
 
