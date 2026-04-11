@@ -1945,7 +1945,7 @@ public static class Executor
         return string.Join("\n", frames.Select(f => $"      {f}")) + "\n";
     }
 
-    public static int RunOnRun(Assembly assembly)
+    public static int RunOnRun(Assembly assembly, bool captureValues = false)
     {
         Type? scopeType = null;
 
@@ -2024,6 +2024,8 @@ public static class Executor
         try
         {
             onRunMethod.Invoke(scope, null);
+            if (captureValues)
+                CaptureFieldValues(scope, scopeType, "OnRun");
             return 0;
         }
         catch (TargetInvocationException ex)
