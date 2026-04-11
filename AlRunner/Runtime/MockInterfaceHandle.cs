@@ -1,11 +1,19 @@
 namespace AlRunner.Runtime;
 
+using Microsoft.Dynamics.Nav.Runtime;
+
 /// <summary>
 /// Lightweight replacement for NavInterfaceHandle.
 /// In the BC runtime, NavInterfaceHandle wraps an ITreeObject to represent
 /// AL interface references. For standalone execution, we just store the object.
+///
+/// Implements <see cref="ITreeObject"/> and
+/// <see cref="IALAssignable{T}"/> so MockInterfaceHandle can satisfy the
+/// type constraints on <c>NavObjectList&lt;T&gt;</c> — BC generates
+/// <c>NavObjectList&lt;MockInterfaceHandle&gt;</c> for AL's
+/// <c>List of [Interface X]</c>.
 /// </summary>
-public class MockInterfaceHandle
+public class MockInterfaceHandle : ITreeObject, IALAssignable<MockInterfaceHandle>
 {
     private object? _implementation;
 
@@ -22,12 +30,47 @@ public class MockInterfaceHandle
     {
     }
 
+    // ITreeObject — stub properties, never inspected in standalone mode.
+    TreeHandler ITreeObject.Tree => null!;
+    TreeObjectType ITreeObject.Type => default;
+    bool ITreeObject.SingleThreaded => false;
+
+    /// <summary>
+    /// Factory used by the rewriter when translating
+    /// <c>ALCompiler.ToInterface(this, codeunit)</c>. Wraps an implementation
+    /// (usually a <see cref="MockCodeunitHandle"/>) so it can be stored in a
+    /// <c>NavObjectList&lt;MockInterfaceHandle&gt;</c>.
+    /// </summary>
+    public static MockInterfaceHandle Wrap(object? implementation)
+    {
+        var h = new MockInterfaceHandle();
+        h.ALAssign(implementation);
+        return h;
+    }
+
+    /// <summary>
+    /// IALAssignable&lt;MockInterfaceHandle&gt;.ALAssign — copy another
+    /// handle's implementation reference into this one. Used when AL
+    /// reassigns interface variables inside a NavObjectList.
+    /// </summary>
+    public void ALAssign(MockInterfaceHandle other)
+    {
+        _implementation = other?._implementation;
+    }
+
     /// <summary>
     /// Assigns an interface implementation (codeunit) to this handle.
     /// In BC, ALAssign wraps the codeunit as an interface implementation.
     /// </summary>
     public void ALAssign(object? implementation)
     {
+        // Unwrap: if the caller hands us another MockInterfaceHandle,
+        // adopt its implementation instead of nesting.
+        if (implementation is MockInterfaceHandle inner)
+        {
+            _implementation = inner._implementation;
+            return;
+        }
         _implementation = implementation;
     }
 

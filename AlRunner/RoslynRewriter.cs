@@ -794,6 +794,18 @@ public MockCurrPage CurrPage { get; } = new MockCurrPage();
                 visited.TypeArgumentList);
         }
 
+        // NavObjectList<T> -> MockObjectList<T>
+        // BC emits `List of [Interface X]` as NavObjectList<NavInterfaceHandle>, which
+        // demands `T : ITreeObject` with a valid Tree handler — unavailable standalone.
+        // MockObjectList<T> exposes the subset of the API the transpiler calls.
+        if (visited.Identifier.Text == "NavObjectList" &&
+            visited.TypeArgumentList.Arguments.Count == 1)
+        {
+            return SyntaxFactory.GenericName(
+                SyntaxFactory.Identifier("MockObjectList"),
+                visited.TypeArgumentList);
+        }
+
         return visited;
     }
 
@@ -847,6 +859,15 @@ public MockCurrPage CurrPage { get; } = new MockCurrPage();
             {
                 return visited.WithArgumentList(SyntaxFactory.ArgumentList());
             }
+        }
+
+        // new MockObjectList<T>(this) -> new MockObjectList<T>()
+        // After VisitGenericName, NavObjectList has already been renamed.
+        // MockObjectList doesn't need the ITreeObject parent.
+        if (typeText.StartsWith("MockObjectList<") && visited.ArgumentList != null &&
+            visited.ArgumentList.Arguments.Count == 1)
+        {
+            return visited.WithArgumentList(SyntaxFactory.ArgumentList());
         }
 
         // new MockDialog(this) -> new MockDialog()
@@ -1248,12 +1269,26 @@ public MockCurrPage CurrPage { get; } = new MockCurrPage();
                         SyntaxFactory.IdentifierName("ObjectToDecimal")));
             }
 
-            // ALCompiler.ToInterface(this, codeunit) -> codeunit (strip interface wrapper)
+            // ALCompiler.ToInterface(this, codeunit) -> MockInterfaceHandle.Wrap(codeunit).
+            // BC's generated code uses this to push a codeunit into a position that
+            // expects NavInterfaceHandle (e.g. a NavObjectList<NavInterfaceHandle> entry).
+            // Wrapping preserves the boxing so the target's T constraint is satisfied;
+            // consumers that only need the raw implementation already unwrap via
+            // MockInterfaceHandle.ALAssign / InvokeInterfaceMethod.
             if (exprText == "ALCompiler" && methodName == "ToInterface")
             {
                 var args = visited.ArgumentList.Arguments;
                 if (args.Count >= 2)
-                    return args[1].Expression;
+                {
+                    return SyntaxFactory.InvocationExpression(
+                        SyntaxFactory.MemberAccessExpression(
+                            SyntaxKind.SimpleMemberAccessExpression,
+                            SyntaxFactory.IdentifierName("MockInterfaceHandle"),
+                            SyntaxFactory.IdentifierName("Wrap")),
+                        SyntaxFactory.ArgumentList(
+                            SyntaxFactory.SingletonSeparatedList(
+                                SyntaxFactory.Argument(args[1].Expression))));
+                }
             }
 
             // ALCompiler.ObjectToExactINavRecordHandle(x) -> (MockRecordHandle)x
