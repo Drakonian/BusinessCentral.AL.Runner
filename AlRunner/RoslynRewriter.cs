@@ -1689,10 +1689,16 @@ public MockCurrPage CurrPage { get; } = new MockCurrPage();
                 return SyntaxFactory.EmptyStatement();
             }
 
-            // NavForm.Run(pageId, record) -> no-op (page navigation not supported standalone)
+            // NavForm.Run / NavForm.RunModal / NavForm.SetRecord called as bare statements
+            // (i.e. value discarded) -> no-op. Page navigation is not supported standalone;
+            // when the return value is assigned, the expression-level rewriter turns it
+            // into default(FormResult) instead — which is not a valid statement, so we must
+            // strip it here first.
             if (invocation.Expression is MemberAccessExpressionSyntax navFormMa &&
                 navFormMa.Expression.ToString() == "NavForm" &&
-                navFormMa.Name.Identifier.Text == "Run")
+                (navFormMa.Name.Identifier.Text == "Run" ||
+                 navFormMa.Name.Identifier.Text == "RunModal" ||
+                 navFormMa.Name.Identifier.Text == "SetRecord"))
             {
                 return SyntaxFactory.EmptyStatement();
             }
