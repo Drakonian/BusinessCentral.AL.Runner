@@ -43,6 +43,7 @@ public class AlRunnerServer
                     response = request.Command?.ToLowerInvariant() switch
                     {
                         "runtests" => HandleRunTests(request, refsTask),
+                        "execute" => HandleExecute(request, refsTask),
                         "shutdown" => HandleShutdown(),
                         _ => JsonSerializer.Serialize(new { error = $"Unknown command: {request.Command}" })
                     };
@@ -105,6 +106,65 @@ public class AlRunnerServer
         }
 
         return SerializeServerResponse(result.Tests, result.ExitCode, cached: false, changedFiles: changedFiles);
+    }
+
+    private string HandleExecute(ServerRequest request, Task<List<Microsoft.CodeAnalysis.MetadataReference>> refsTask)
+    {
+        // Accept either inline code or a set of source paths (run-mode on
+        // the first codeunit's OnRun trigger). One of the two must be set.
+        if (string.IsNullOrWhiteSpace(request.Code) && (request.SourcePaths == null || request.SourcePaths.Length == 0))
+            return JsonSerializer.Serialize(new { error = "execute requires either 'code' (inline AL) or 'sourcePaths'" });
+
+        var options = new PipelineOptions { OutputJson = false };
+        if (!string.IsNullOrWhiteSpace(request.Code))
+            options.InlineCode = request.Code;
+        if (request.SourcePaths != null)
+            options.InputPaths.AddRange(request.SourcePaths);
+        if (request.PackagePaths != null)
+            options.PackagePaths.AddRange(request.PackagePaths);
+        if (request.StubPaths != null)
+            options.StubPaths.AddRange(request.StubPaths);
+        if (request.CaptureValues == true)
+            options.CaptureValues = true;
+
+        var pipeline = new AlRunnerPipeline();
+        var result = pipeline.Run(options);
+
+        return SerializeExecuteResponse(result);
+    }
+
+    private static string SerializeExecuteResponse(PipelineResult result)
+    {
+        var output = new
+        {
+            exitCode = result.ExitCode,
+            // Tests may be empty for a pure run-mode invocation — keep the
+            // field for shape consistency with runTests responses.
+            tests = result.Tests.Select(t => new
+            {
+                name = t.Name,
+                status = t.Status.ToString().ToLowerInvariant(),
+                durationMs = t.DurationMs,
+                message = t.Message,
+                stackTrace = t.StackTrace?.TrimEnd(),
+                alSourceLine = t.AlSourceLine,
+                alSourceColumn = t.AlSourceColumn
+            }),
+            messages = result.Messages.Count > 0 ? result.Messages : null,
+            capturedValues = result.CapturedValues.Count > 0
+                ? result.CapturedValues.Select(c => new
+                {
+                    scopeName = c.ScopeName,
+                    variableName = c.VariableName,
+                    value = c.Value,
+                    statementId = c.StatementId
+                })
+                : null
+        };
+        return JsonSerializer.Serialize(output, new JsonSerializerOptions
+        {
+            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+        });
     }
 
     private static string SerializeServerResponse(List<TestResult> tests, int exitCode, bool cached, List<string>? changedFiles = null)
@@ -311,4 +371,12 @@ public class ServerRequest
 
     [JsonPropertyName("stubPaths")]
     public string[]? StubPaths { get; set; }
+
+    /// <summary>Inline AL source (used by the <c>execute</c> command).</summary>
+    [JsonPropertyName("code")]
+    public string? Code { get; set; }
+
+    /// <summary>Opt-in to variable capture on <c>execute</c>.</summary>
+    [JsonPropertyName("captureValues")]
+    public bool? CaptureValues { get; set; }
 }

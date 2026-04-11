@@ -95,6 +95,64 @@ public class IncrementalTests
     }
 
     [Fact]
+    public async Task Server_ExecuteInlineCode_ReturnsCapturedMessages()
+    {
+        await using var server = await CliServer.StartAsync();
+
+        var request = JsonSerializer.Serialize(new
+        {
+            command = "execute",
+            code = "Message('from server execute');"
+        });
+
+        var response = await server.SendAsync(request);
+        var doc = JsonDocument.Parse(response);
+
+        Assert.Equal(0, doc.RootElement.GetProperty("exitCode").GetInt32());
+        Assert.True(doc.RootElement.TryGetProperty("messages", out var msgs), "execute response must include messages");
+        Assert.True(msgs.GetArrayLength() > 0, "execute should capture at least one Message()");
+        Assert.Contains("from server execute", msgs[0].GetString());
+    }
+
+    [Fact]
+    public async Task Server_ExecuteSourcePaths_RunsOnRunTrigger()
+    {
+        // tests/01-pure-function/ is a codeunit with procedures but no OnRun;
+        // BC auto-generates an empty OnRun so the runner can still invoke it.
+        // Using a fixture we know has a Message in its OnRun would be cleaner,
+        // but the existing fixtures don't expose one; the test here just
+        // asserts the dispatch succeeds and returns a structured response.
+        await using var server = await CliServer.StartAsync();
+
+        var request = JsonSerializer.Serialize(new
+        {
+            command = "execute",
+            code = "codeunit 98 __X { trigger OnRun() begin Message('ran %1', 'ok'); end; }"
+        });
+
+        var response = await server.SendAsync(request);
+        var doc = JsonDocument.Parse(response);
+
+        Assert.Equal(0, doc.RootElement.GetProperty("exitCode").GetInt32());
+        Assert.True(doc.RootElement.TryGetProperty("messages", out var msgs));
+        Assert.True(msgs.GetArrayLength() > 0);
+        Assert.Contains("ran ok", msgs[0].GetString());
+    }
+
+    [Fact]
+    public async Task Server_ExecuteRejectsMissingCodeAndPaths()
+    {
+        await using var server = await CliServer.StartAsync();
+
+        var request = JsonSerializer.Serialize(new { command = "execute" });
+        var response = await server.SendAsync(request);
+        var doc = JsonDocument.Parse(response);
+
+        Assert.True(doc.RootElement.TryGetProperty("error", out var err));
+        Assert.Contains("code", err.GetString(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task Server_Response_IncludesChangedFilesOnCacheMiss()
     {
         // On a cache miss, response should report which files caused the

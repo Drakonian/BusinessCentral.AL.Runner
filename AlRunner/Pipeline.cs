@@ -77,13 +77,17 @@ public class AlRunnerPipeline
         var stderr = new StringWriter();
         var testResults = new List<TestResult>();
 
-        // Capture Console.Error too — parts of the pipeline (AlTranspiler,
-        // diagnostics emission) still write directly to it. Routing it into
-        // the same StringWriter keeps tests deterministic when asserting on
-        // error output.
+        // Redirect Console.Out and Console.Error into the captured
+        // StringWriters for the duration of the run. Parts of the pipeline
+        // (AlTranspiler diagnostics) and the AL runtime (AlDialog.Message,
+        // PrintResults) write directly to the process console, which would
+        // otherwise corrupt the server's stdin/stdout JSON protocol and
+        // make tests non-deterministic. The CLI caller is responsible for
+        // forwarding result.StdOut / result.StdErr back to the real console.
         var originalConsoleError = Console.Error;
-        var teeStderr = new TeeTextWriter(stderr, originalConsoleError);
-        Console.SetError(teeStderr);
+        var originalConsoleOut = Console.Out;
+        Console.SetError(stderr);
+        Console.SetOut(stdout);
         int exitCode;
         try
         {
@@ -92,6 +96,7 @@ public class AlRunnerPipeline
         finally
         {
             Console.SetError(originalConsoleError);
+            Console.SetOut(originalConsoleOut);
         }
 
         // Collect captured values
