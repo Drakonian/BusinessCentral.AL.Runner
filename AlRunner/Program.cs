@@ -501,8 +501,14 @@ public static class AlTranspiler
         }
 
         // Check for declaration-level diagnostics before emit
-        // AL0432 (obsolete/removed field) is not a blocking error for the runner
-        var ignoredErrorIds = new HashSet<string> { "AL0432", "AL0433" };
+        // AL0432/AL0433: obsolete/removed field references — not blocking
+        // AL0791: unknown namespace in a `using` directive — not blocking when
+        //   nothing from the namespace is actually resolved; real BC projects
+        //   often carry legacy `using` lines the runner doesn't need to honor.
+        //   Genuine uses of the unresolved namespace will still surface as
+        //   separate unresolved-identifier errors, so this only silences the
+        //   "no-op import" noise.
+        var ignoredErrorIds = new HashSet<string> { "AL0432", "AL0433", "AL0791" };
         var declDiags = compilation.GetDeclarationDiagnostics().ToList();
         var declErrors = declDiags
             .Where(d => d.Severity == DiagnosticSeverity.Error && !ignoredErrorIds.Contains(d.Id))
