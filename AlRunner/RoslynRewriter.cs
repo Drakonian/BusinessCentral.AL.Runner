@@ -728,6 +728,13 @@ public MockCurrPage CurrPage { get; } = new MockCurrPage();
         if (text == "NavInterfaceHandle")
             return node.WithIdentifier(SyntaxFactory.Identifier("MockInterfaceHandle"));
 
+        // NavFormHandle -> MockFormHandle
+        // BC emits `Page "X"` AL variables as `NavFormHandle p` fields with
+        // `new NavFormHandle(this, pageId)` initializers — both args would
+        // need an ITreeObject and a real NavForm which standalone mode lacks.
+        if (text == "NavFormHandle")
+            return node.WithIdentifier(SyntaxFactory.Identifier("MockFormHandle"));
+
         // NavRecordRef -> MockRecordRef
         // NavRecordRef's real ctor wants ITreeObject; MockRecordRef has a
         // parameterless ctor and stub methods so the AL declaration compiles.
@@ -865,6 +872,15 @@ public MockCurrPage CurrPage { get; } = new MockCurrPage();
             {
                 return visited.WithArgumentList(SyntaxFactory.ArgumentList());
             }
+        }
+
+        // new MockFormHandle(this, pageId) -> new MockFormHandle()
+        // Drop all args — MockFormHandle only needs to compile, not resolve
+        // a real page. The id isn't interesting in standalone mode because
+        // nothing can read it back.
+        if (typeText == "MockFormHandle")
+        {
+            return visited.WithArgumentList(SyntaxFactory.ArgumentList());
         }
 
         // new MockRecordRef(this, ...) -> new MockRecordRef()
@@ -1207,7 +1223,10 @@ public MockCurrPage CurrPage { get; } = new MockCurrPage();
 
             // NavForm.Run(pageId, record) -> no-op (page navigation not supported standalone)
             // NavForm.RunModal(bool, bool, pageId, record) -> FormResult.LookupOK
-            if (exprText == "NavForm" && (methodName == "Run" || methodName == "RunModal"))
+            // Accept the fully-qualified form too — older BC versions emit
+            // `Microsoft.Dynamics.Nav.Runtime.NavForm.Run(...)`.
+            if ((exprText == "NavForm" || exprText.EndsWith(".NavForm", StringComparison.Ordinal)) &&
+                (methodName == "Run" || methodName == "RunModal"))
             {
                 // RunModal returns FormResult, but the enum is from Nav.Ncl. Return a constant.
                 // FormResult.LookupOK = used in transpiled code for dialog lookups
@@ -1713,6 +1732,18 @@ public MockCurrPage CurrPage { get; } = new MockCurrPage();
         return visited;
     }
 
+    /// <summary>
+    /// Returns true if an expression refers to the BC NavForm type, whether
+    /// written as a bare `NavForm` identifier or fully-qualified such as
+    /// `Microsoft.Dynamics.Nav.Runtime.NavForm`. BC compiler output varies
+    /// across versions.
+    /// </summary>
+    private static bool IsNavFormReference(ExpressionSyntax expr)
+    {
+        var text = expr.ToString();
+        return text == "NavForm" || text.EndsWith(".NavForm", StringComparison.Ordinal);
+    }
+
     private static readonly HashSet<string> NavVariantTypeCheckProps = new(StringComparer.Ordinal)
     {
         "ALIsBoolean", "ALIsOption", "ALIsInteger", "ALIsByte", "ALIsBigInteger",
@@ -1744,8 +1775,13 @@ public MockCurrPage CurrPage { get; } = new MockCurrPage();
             // when the return value is assigned, the expression-level rewriter turns it
             // into default(FormResult) instead — which is not a valid statement, so we must
             // strip it here first.
+            //
+            // Accept both `NavForm.Method(...)` and fully-qualified
+            // `Microsoft.Dynamics.Nav.Runtime.NavForm.Method(...)` — older BC
+            // compiler versions emit the qualified form, so a strict `== "NavForm"`
+            // check missed them and let the broken call survive into Roslyn.
             if (invocation.Expression is MemberAccessExpressionSyntax navFormMa &&
-                navFormMa.Expression.ToString() == "NavForm" &&
+                IsNavFormReference(navFormMa.Expression) &&
                 (navFormMa.Name.Identifier.Text == "Run" ||
                  navFormMa.Name.Identifier.Text == "RunModal" ||
                  navFormMa.Name.Identifier.Text == "SetRecord"))
