@@ -41,7 +41,7 @@ public static class CoverageReport
         var map = new Dictionary<(string, int), (int Line, int Column)>();
 
         var spanPattern = new Regex(@"\[SourceSpans\(([^)]+)\)\]");
-        var scopePattern = new Regex(@"class\s+(\w+_Scope_\w+)");
+        var scopePattern = new Regex(@"class\s+(\w+_Scope(?:_\w+)?)");
 
         foreach (var (name, code) in generatedCSharp)
         {

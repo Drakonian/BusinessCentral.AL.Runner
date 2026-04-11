@@ -1141,7 +1141,7 @@ public static class SourceLineMapper
         var stmtPattern = new System.Text.RegularExpressions.Regex(
             @"\b(?:StmtHit|CStmtHit)\((\d+)\)");
         var classPattern = new System.Text.RegularExpressions.Regex(
-            @"class\s+(\w+_Scope_\w+)");
+            @"class\s+(\w+_Scope(?:_\w+)?)");
 
         foreach (var (name, code) in postRewriteCSharp)
         {
@@ -1654,7 +1654,7 @@ public static class Executor
         var stmtPattern = new System.Text.RegularExpressions.Regex(
             @"\b(?:StmtHit|CStmtHit)\((\d+)\)");
         var classPattern = new System.Text.RegularExpressions.Regex(
-            @"class\s+(\w+_Scope_\w+)");
+            @"class\s+(\w+_Scope(?:_\w+)?)");
 
         foreach (var (name, code) in rewrittenSources)
         {
