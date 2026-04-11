@@ -209,6 +209,22 @@ public class MockRecordHandle
         _currentResultSet = null;
     }
 
+    /// <summary>
+    /// Expose the in-memory table store for RecordRef-level access — the
+    /// MockRecordRef stub reads this when it's been Open()'d against a
+    /// table ID, so RecRef.IsEmpty / FindSet / Next work against the
+    /// same row set normal `Record X` handles operate on.
+    /// </summary>
+    public static bool TableHasAnyRow(int tableId)
+    {
+        return _tables.TryGetValue(tableId, out var rows) && rows.Count > 0;
+    }
+
+    public static int TableRowCount(int tableId)
+    {
+        return _tables.TryGetValue(tableId, out var rows) ? rows.Count : 0;
+    }
+
     public bool ALInsert(DataError errorLevel) => ALInsert(errorLevel, false);
 
     public bool ALInsert(DataError errorLevel, bool runTrigger)

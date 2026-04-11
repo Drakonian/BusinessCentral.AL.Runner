@@ -1,28 +1,34 @@
+using System.Reflection;
+
 namespace AlRunner.Runtime;
 
 /// <summary>
-/// Compile-only stub for <c>NavFormHandle</c> / AL's
-/// <c>Page "X"</c> variable. BC instantiates the field as
-/// <c>new NavFormHandle(this, pageId)</c>, which demands ITreeObject
-/// and a valid NavForm argument — unavailable standalone.
+/// Stub for <c>NavFormHandle</c> / AL's <c>Page "X"</c> variable.
 ///
-/// MockFormHandle has a parameterless constructor and no-op Run /
-/// RunModal / SetRecord / GetRecord so AL code that declares a Page
-/// variable and calls <c>p.Run()</c> compiles and executes without
-/// touching the (unavailable) UI surface. Consistent with the existing
-/// "pages stub but do not function" policy — any attempt to read page
-/// state back returns defaults.
+/// Two capabilities:
+///
+/// 1. **Declaration site**: BC emits <c>new NavFormHandle(this, pageId)</c>
+///    in the containing scope's field initialiser; the real ctor wants
+///    ITreeObject + NavForm which don't exist standalone. The rewriter
+///    rewrites the ctor call to <c>new MockFormHandle(pageId)</c>.
+///
+/// 2. **Procedure dispatch**: when the AL code calls a plain helper
+///    procedure on the page variable (<c>P.FormatText(...)</c>), BC
+///    lowers it to <c>p.Invoke(memberId, args)</c>. This class mirrors
+///    MockCodeunitHandle's dispatch strategy: reflect over the
+///    generated <c>Page{pageId}</c> class, find the method whose scope
+///    class name carries the matching memberId, and invoke it. No UI
+///    lifecycle; triggers and layout are still skipped.
 /// </summary>
 public class MockFormHandle
 {
-    public int Id { get; private set; }
+    public int PageId { get; }
+
+    private object? _pageInstance;
 
     public MockFormHandle() { }
 
-    public MockFormHandle(int id)
-    {
-        Id = id;
-    }
+    public MockFormHandle(int pageId) { PageId = pageId; }
 
     public void Run() { }
     public void RunModal() { }
@@ -31,4 +37,70 @@ public class MockFormHandle
     public void Update(bool saveRecord = true) { }
     public void Close() { }
     public void Activate() { }
+
+    /// <summary>Dispatch a plain helper procedure on the page's generated class.</summary>
+    public object? Invoke(int memberId, object[] args)
+    {
+        var assembly = MockCodeunitHandle.CurrentAssembly;
+        if (assembly == null) return null;
+
+        Type? pageType = null;
+        foreach (var t in assembly.GetTypes())
+        {
+            if (t.Name == $"Page{PageId}") { pageType = t; break; }
+        }
+        if (pageType == null) return null;
+
+        if (_pageInstance == null)
+        {
+            _pageInstance = System.Runtime.CompilerServices.RuntimeHelpers.GetUninitializedObject(pageType);
+            var initMethod = pageType.GetMethod("InitializeComponent",
+                BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance);
+            initMethod?.Invoke(_pageInstance, null);
+        }
+
+        // Match the same scope-name encoding MockCodeunitHandle uses.
+        var absMemberId = System.Math.Abs(memberId).ToString();
+        var memberIdStr = memberId.ToString();
+
+        foreach (var nested in pageType.GetNestedTypes(BindingFlags.NonPublic | BindingFlags.Public))
+        {
+            if (nested.Name.Contains($"_Scope_{memberIdStr}") ||
+                nested.Name.Contains($"_Scope__{absMemberId}"))
+            {
+                var scopeName = nested.Name;
+                var scopeIdx = scopeName.IndexOf("_Scope_");
+                if (scopeIdx < 0) continue;
+                var methodName = scopeName.Substring(0, scopeIdx);
+
+                var method = pageType.GetMethod(methodName,
+                    BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                if (method == null) continue;
+
+                var parameters = method.GetParameters();
+                var convertedArgs = new object?[parameters.Length];
+                for (int i = 0; i < parameters.Length; i++)
+                {
+                    if (i < args.Length)
+                        convertedArgs[i] = args[i];
+                }
+                return method.Invoke(_pageInstance, convertedArgs);
+            }
+        }
+
+        // Fallback: match by argument count across public methods.
+        var candidateMethods = pageType.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
+            .Where(m => m.GetParameters().Length == args.Length && !m.IsSpecialName && m.DeclaringType == pageType)
+            .ToArray();
+        if (candidateMethods.Length == 1)
+        {
+            var method = candidateMethods[0];
+            var parameters = method.GetParameters();
+            var convertedArgs = new object?[parameters.Length];
+            for (int i = 0; i < parameters.Length; i++)
+                if (i < args.Length) convertedArgs[i] = args[i];
+            return method.Invoke(_pageInstance, convertedArgs);
+        }
+        return null;
+    }
 }

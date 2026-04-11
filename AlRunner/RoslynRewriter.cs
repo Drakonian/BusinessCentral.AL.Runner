@@ -40,12 +40,13 @@ public class RoslynRewriter : CSharpSyntaxRewriter
     /// <summary>
     /// Methods that take ITreeObject as first arg which we strip (e.g., value.ALByValue(this))
     /// </summary>
-    // Methods on BC types that accept ITreeObject/NavRecord but should be no-ops in standalone mode
+    // Methods on BC types that accept ITreeObject/NavRecord but should be no-ops in standalone mode.
+    // NOTE: RunEvent is NOT stripped here anymore — it's intercepted specifically in the
+    // statement-level rewriter so we can dispatch to registered event subscribers (#32).
     private static readonly HashSet<string> StripEntireCallMethods = new(StringComparer.Ordinal)
     {
         "ALGetTable", // NavRecordRef.ALGetTable(NavRecord) — record assertion methods only
         "ALClose",    // NavRecordRef.ALClose()
-        "RunEvent",   // NavEventScope.RunEvent() — event subscriber dispatch, no-op standalone
         "ALCommit",   // ALDatabase.ALCommit() — SQL transaction commit, no-op standalone
         "ALCommit",   // ALDatabase.ALCommit() — transaction commit, no-op standalone
         "ALSelectLatestVersion", // ALDatabase.ALSelectLatestVersion() — no-op standalone
@@ -895,13 +896,23 @@ public MockCurrPage CurrPage { get; } = new MockCurrPage();
             }
         }
 
-        // new MockFormHandle(this, pageId) -> new MockFormHandle()
-        // Drop all args — MockFormHandle only needs to compile, not resolve
-        // a real page. The id isn't interesting in standalone mode because
-        // nothing can read it back.
-        if (typeText == "MockFormHandle")
+        // new MockFormHandle(this, pageId) -> new MockFormHandle(pageId)
+        // Preserve the page id so the runtime can dispatch helper-procedure
+        // calls on the Page<N> class via reflection.
+        if (typeText == "MockFormHandle" && visited.ArgumentList != null)
         {
-            return visited.WithArgumentList(SyntaxFactory.ArgumentList());
+            if (visited.ArgumentList.Arguments.Count == 2)
+            {
+                return visited.WithArgumentList(
+                    SyntaxFactory.ArgumentList(
+                        SyntaxFactory.SingletonSeparatedList(visited.ArgumentList.Arguments[1])));
+            }
+            if (visited.ArgumentList.Arguments.Count == 1)
+            {
+                // Single-arg `new MockFormHandle(this)` (no page id known).
+                // Fall back to parameterless ctor.
+                return visited.WithArgumentList(SyntaxFactory.ArgumentList());
+            }
         }
 
         // new MockRecordRef(this, ...) -> new MockRecordRef()
@@ -1888,6 +1899,30 @@ public MockCurrPage CurrPage { get; } = new MockCurrPage();
     };
 
     // -----------------------------------------------------------------------
+    // If statements: strip the `if (X.γeventScope == null && !Session.IsEventSessionRecorderEnabled) return;`
+    // guard at the top of BC-generated event methods. Without this, the
+    // generated method bails before reaching the rewritten FireEvent
+    // statement because γeventScope stays null (no BC-level subscribers
+    // registered in standalone mode).
+    // -----------------------------------------------------------------------
+    public override SyntaxNode? VisitIfStatement(IfStatementSyntax node)
+    {
+        if (node.Condition is BinaryExpressionSyntax bin &&
+            bin.OperatorToken.IsKind(SyntaxKind.AmpersandAmpersandToken))
+        {
+            static bool MentionsEventScope(ExpressionSyntax expr) =>
+                expr.DescendantNodesAndSelf().OfType<IdentifierNameSyntax>()
+                    .Any(id => id.Identifier.ValueText == "γeventScope");
+
+            if (MentionsEventScope(bin.Left) || MentionsEventScope(bin.Right))
+            {
+                return SyntaxFactory.EmptyStatement();
+            }
+        }
+        return base.VisitIfStatement(node);
+    }
+
+    // -----------------------------------------------------------------------
     // Expression statements: remove StmtHit(N); and handle NavRuntimeHelpers
     // -----------------------------------------------------------------------
     public override SyntaxNode? VisitExpressionStatement(ExpressionStatementSyntax node)
@@ -1901,6 +1936,50 @@ public MockCurrPage CurrPage { get; } = new MockCurrPage();
                 StripEntireCallMethods.Contains(stripMa.Name.Identifier.Text))
             {
                 // Return empty statement instead of null to avoid crash inside using blocks
+                return SyntaxFactory.EmptyStatement();
+            }
+
+            // `βscope.RunEvent()` dispatches event subscribers. Walk the
+            // ancestor tree to recover the enclosing Codeunit<N> type and
+            // the enclosing event method name, then rewrite the statement
+            // to a direct call into AlCompat.FireEvent which consults the
+            // subscriber registry built at runtime via reflection.
+            if (invocation.Expression is MemberAccessExpressionSyntax runEventMa &&
+                runEventMa.Name.Identifier.Text == "RunEvent" &&
+                invocation.ArgumentList.Arguments.Count == 0)
+            {
+                int? cuId = null;
+                string? eventName = null;
+                foreach (var ancestor in node.Ancestors())
+                {
+                    if (eventName == null && ancestor is MethodDeclarationSyntax mdecl)
+                        eventName = mdecl.Identifier.Text;
+                    if (ancestor is ClassDeclarationSyntax cdecl && cdecl.Identifier.Text.StartsWith("Codeunit"))
+                    {
+                        var idStr = cdecl.Identifier.Text.Substring("Codeunit".Length);
+                        if (int.TryParse(idStr, out var id)) cuId = id;
+                        break;
+                    }
+                }
+                if (cuId.HasValue && eventName != null)
+                {
+                    var call = SyntaxFactory.InvocationExpression(
+                        SyntaxFactory.MemberAccessExpression(
+                            SyntaxKind.SimpleMemberAccessExpression,
+                            SyntaxFactory.IdentifierName("AlCompat"),
+                            SyntaxFactory.IdentifierName("FireEvent")),
+                        SyntaxFactory.ArgumentList(SyntaxFactory.SeparatedList(new[]
+                        {
+                            SyntaxFactory.Argument(SyntaxFactory.LiteralExpression(
+                                SyntaxKind.NumericLiteralExpression,
+                                SyntaxFactory.Literal(cuId.Value))),
+                            SyntaxFactory.Argument(SyntaxFactory.LiteralExpression(
+                                SyntaxKind.StringLiteralExpression,
+                                SyntaxFactory.Literal(eventName)))
+                        })));
+                    return SyntaxFactory.ExpressionStatement(call);
+                }
+                // Fallback: strip the call, same as before.
                 return SyntaxFactory.EmptyStatement();
             }
 

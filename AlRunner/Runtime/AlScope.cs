@@ -323,6 +323,49 @@ public static class AlCompat
     }
 
     /// <summary>
+    /// Dispatch AL [EventSubscriber] procedures registered against a
+    /// [IntegrationEvent] / [BusinessEvent] raised by the publisher at
+    /// (codeunitId, eventName). Called from generated event-method
+    /// bodies by the rewriter in place of the now-stripped
+    /// <c>βscope.RunEvent()</c> call.
+    ///
+    /// The subscriber registry is populated lazily by scanning the
+    /// current assembly for methods carrying
+    /// <c>NavEventSubscriberAttribute</c> the first time FireEvent is
+    /// called — later runs on the same assembly reuse the cache.
+    /// </summary>
+    public static void FireEvent(int publisherCodeunitId, string eventName)
+    {
+        var asm = MockCodeunitHandle.CurrentAssembly;
+        if (asm == null) return;
+        var subs = EventSubscriberRegistry.GetSubscribers(asm, publisherCodeunitId, eventName);
+        foreach (var (ownerType, method) in subs)
+        {
+            object? instance;
+            try
+            {
+                instance = System.Runtime.CompilerServices.RuntimeHelpers.GetUninitializedObject(ownerType);
+                var initMethod = ownerType.GetMethod("InitializeComponent",
+                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+                initMethod?.Invoke(instance, null);
+            }
+            catch { continue; }
+
+            // Zero-arg call for now — subscribers that take Sender/Rec
+            // arguments get them filled with null. That matches BC's
+            // "best effort" stance for standalone event dispatch.
+            var parameters = method.GetParameters();
+            var args = new object?[parameters.Length];
+            try { method.Invoke(instance, args); }
+            catch (System.Reflection.TargetInvocationException tie)
+            {
+                if (tie.InnerException != null) throw tie.InnerException;
+                throw;
+            }
+        }
+    }
+
+    /// <summary>
     /// Create a NavOption that inherits the enum-id tag from an existing
     /// NavOption. Emitted by the rewriter for
     /// <c>NavOption.Create(existing.NavOptionMetadata, V)</c>
