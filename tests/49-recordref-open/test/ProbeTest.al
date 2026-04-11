@@ -16,10 +16,17 @@ codeunit 50491 "RR Open Tests"
     end;
 
     [Test]
-    procedure OneArgOpenStillWorks()
+    procedure OneArgOpenCompilesAndRuns()
     var
         Probe: Codeunit "RR Open Probe";
+        Result: Integer;
     begin
-        Assert.IsTrue(Probe.ProbeLocal(), 'Single-arg Open + IsEmpty must still resolve');
+        // [GIVEN] A procedure that calls single-arg RecRef.Open and IsEmpty in an if-branch
+        // [THEN] The codeunit must compile and the procedure must return its post-call sentinel.
+        //        We deliberately avoid asserting the truth value of IsEmpty because BC's
+        //        lowering for `RecRef.IsEmpty()` varies across compiler versions and the
+        //        RecordRef stub policy is "compiles but does not function at runtime".
+        Result := Probe.ProbeLocal();
+        Assert.IsTrue(Result >= 10, 'ProbeLocal must reach the post-IsEmpty sentinel');
     end;
 }

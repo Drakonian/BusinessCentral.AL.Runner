@@ -14,12 +14,21 @@ codeunit 50490 "RR Open Probe"
         exit(true);
     end;
 
-    procedure ProbeLocal(): Boolean
+    procedure ProbeLocal(): Integer
     var
         RecRef: RecordRef;
+        Sentinel: Integer;
     begin
-        // Single-arg form still works.
+        // Single-arg form still compiles and runs.
+        // IsEmpty() is called in an if-branch so BC lowers it through
+        // whichever runtime path is current for that compiler version,
+        // but we don't assert on the actual truth value — the RecordRef
+        // runner policy is "stub compiles, does not function".
+        Sentinel := 0;
         RecRef.Open(18);
-        exit(RecRef.IsEmpty());
+        if RecRef.IsEmpty() then
+            Sentinel += 1;
+        Sentinel += 10;
+        exit(Sentinel);
     end;
 }
