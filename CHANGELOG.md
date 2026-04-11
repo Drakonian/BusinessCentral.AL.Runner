@@ -4,6 +4,34 @@ All notable changes to this project are documented here. Format based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioning follows
 [SemVer](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.5] — 2026-04-11
+
+### Fixed
+- **`SetFilter` with Option member-name literals** (e.g.
+  `SetFilter(Kind, '<>Red&<>Blue')`) now resolves the literal to its
+  ordinal via `EnumRegistry.FindOrdinalByMemberName` before comparing,
+  instead of producing a string-form mismatch against the stored
+  NavOption ordinal. Also harvests inline `OptionMembers = A,B,C;`
+  declarations from table fields so Option fields without a separate
+  `enum` object resolve too.
+  ([#19](https://github.com/StefanMaron/BusinessCentral.AL.Runner/issues/19) follow-up)
+- **~200 ms per-test spike on the first `SetFilter` over a NavOption
+  field**. `MockRecordHandle.NavValueToString` used to fall back to
+  `value.ToString()` for NavOption (and any other subtype without an
+  explicit branch), which traps into BC's `NavFormatEvaluateHelper`
+  → triggers `Microsoft.CodeAnalysis` reference resolution + Roslyn
+  overload resolution on first use. The fallback is gone; NavOption,
+  NavDate, NavDateTime now have explicit branches, NavDecimal uses a
+  cached `PropertyInfo` instead of reflecting per call, and unknown
+  types return empty string rather than reaching the slow path.
+  ([#23](https://github.com/StefanMaron/BusinessCentral.AL.Runner/issues/23))
+
+### Internal
+- New `AlRunner.Tests/NavValueToStringPerfTests.cs` holds the line:
+  every test in `tests/52-setfilter-and/` must run in under 50 ms, so
+  any regression back into BC's `NavValue.ToString()` fallback fails
+  loudly.
+
 ## [1.0.4] — 2026-04-11
 
 ### Added
@@ -194,6 +222,7 @@ for pure-logic codeunits. No BC service tier, no Docker, no SQL, no
 license. Test runner with `Subtype = Test` discovery and `Assert`
 codeunit mock.
 
+[1.0.5]: https://github.com/StefanMaron/BusinessCentral.AL.Runner/releases/tag/v1.0.5
 [1.0.4]: https://github.com/StefanMaron/BusinessCentral.AL.Runner/releases/tag/v1.0.4
 [1.0.3]: https://github.com/StefanMaron/BusinessCentral.AL.Runner/releases/tag/v1.0.3
 [1.0.2]: https://github.com/StefanMaron/BusinessCentral.AL.Runner/releases/tag/v1.0.2
