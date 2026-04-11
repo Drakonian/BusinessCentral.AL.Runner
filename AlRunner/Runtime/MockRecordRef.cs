@@ -41,9 +41,19 @@ public class MockRecordRef
     public int Count() => 0;
 
     // AL-lowered surface the BC compiler sometimes emits for RecordRef calls.
+    // BC prefixes most of the ALOpen overloads with a CompilationTarget enum,
+    // which we accept as an untyped first arg (rewriter needs zero changes
+    // to pass it through). ALIsEmpty is a property in the BC runtime — not
+    // a method — so we expose it the same way or AL lowering produces
+    // `method group` errors on `!recRef.ALIsEmpty` expressions.
     public void ALOpen(int tableId) => Number = tableId;
+    public void ALOpen(int tableId, bool temporary) => Number = tableId;
+    public void ALOpen(int tableId, bool temporary, string companyName) => Number = tableId;
+    public void ALOpen(object compilationTarget, int tableId) => Number = tableId;
+    public void ALOpen(object compilationTarget, int tableId, bool temporary) => Number = tableId;
+    public void ALOpen(object compilationTarget, int tableId, bool temporary, string companyName) => Number = tableId;
     public void ALClose() => Number = 0;
-    public bool ALIsEmpty() => true;
+    public bool ALIsEmpty => true;
     public bool ALFindFirst() => false;
     public bool ALFindSet() => false;
     public int ALCount() => 0;
