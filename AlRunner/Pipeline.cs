@@ -33,6 +33,11 @@ public class TestResult
     public string? StackTrace { get; init; }
     /// <summary>AL source line where the error occurred (null for passing tests).</summary>
     public int? AlSourceLine { get; init; }
+    /// <summary>
+    /// AL source column where the error occurred (1-based, null for passing
+    /// tests or when the underlying source-span lacks column info).
+    /// </summary>
+    public int? AlSourceColumn { get; init; }
 }
 
 public class CapturedValue
@@ -146,7 +151,8 @@ public class AlRunnerPipeline
                 durationMs = t.DurationMs,
                 message = t.Message,
                 stackTrace = t.StackTrace?.TrimEnd(),
-                alSourceLine = t.AlSourceLine
+                alSourceLine = t.AlSourceLine,
+                alSourceColumn = t.AlSourceColumn
             }),
             passed = tests.Count(t => t.Status == TestStatus.Pass),
             failed = tests.Count(t => t.Status == TestStatus.Fail),

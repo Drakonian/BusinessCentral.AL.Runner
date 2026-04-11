@@ -59,4 +59,38 @@ public class ErrorLineMappingTests
         Assert.True(failedTest.TryGetProperty("alSourceLine", out var line));
         Assert.True(line.GetInt32() > 0);
     }
+
+    [Fact]
+    public void FailingTest_IncludesAlSourceColumn()
+    {
+        var pipeline = new AlRunnerPipeline();
+        var result = pipeline.Run(new PipelineOptions
+        {
+            InputPaths = { TestPath("06-intentional-failure", "src"), TestPath("06-intentional-failure", "test") }
+        });
+
+        Assert.NotEqual(0, result.ExitCode);
+        var failedTest = result.Tests.First(t => t.Status == TestStatus.Fail);
+        // Column should be populated alongside the line so IDE decorations
+        // can underline the exact failing expression, not the whole row.
+        Assert.NotNull(failedTest.AlSourceColumn);
+        Assert.True(failedTest.AlSourceColumn > 0, "AL source column should be positive");
+    }
+
+    [Fact]
+    public void OutputJson_FailingTest_IncludesAlColumn()
+    {
+        var pipeline = new AlRunnerPipeline();
+        var result = pipeline.Run(new PipelineOptions
+        {
+            InputPaths = { TestPath("06-intentional-failure", "src"), TestPath("06-intentional-failure", "test") },
+            OutputJson = true
+        });
+
+        var doc = JsonDocument.Parse(result.StdOut.Trim());
+        var tests = doc.RootElement.GetProperty("tests");
+        var failedTest = tests.EnumerateArray().First(t => t.GetProperty("status").GetString() == "fail");
+        Assert.True(failedTest.TryGetProperty("alSourceColumn", out var col));
+        Assert.True(col.GetInt32() > 0);
+    }
 }

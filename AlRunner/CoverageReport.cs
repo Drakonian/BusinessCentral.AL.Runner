@@ -19,12 +19,26 @@ public static class CoverageReport
     ///
     /// SourceSpans encoding: each long value packs start and end positions as
     /// (end_line &lt;&lt; 48) | (end_col &lt;&lt; 32) | (start_line &lt;&lt; 16) | start_col.
-    /// We extract start_line from the lower 32 bits: (value &amp; 0xFFFFFFFF) >> 16.
+    /// We extract start_line from the lower 32 bits: (value &amp; 0xFFFFFFFF) >> 16
+    /// and start_col as the low 16 bits: value &amp; 0xFFFF.
     /// </summary>
     public static Dictionary<(string Scope, int StmtIndex), int> ParseSourceSpans(
         List<(string Name, string Code)> generatedCSharp)
     {
-        var map = new Dictionary<(string, int), int>();
+        var pairs = ParseSourceSpansWithColumns(generatedCSharp);
+        var map = new Dictionary<(string, int), int>(pairs.Count);
+        foreach (var kv in pairs)
+            map[kv.Key] = kv.Value.Line;
+        return map;
+    }
+
+    /// <summary>
+    /// Same as <see cref="ParseSourceSpans"/> but preserves column info.
+    /// </summary>
+    public static Dictionary<(string Scope, int StmtIndex), (int Line, int Column)> ParseSourceSpansWithColumns(
+        List<(string Name, string Code)> generatedCSharp)
+    {
+        var map = new Dictionary<(string, int), (int Line, int Column)>();
 
         var spanPattern = new Regex(@"\[SourceSpans\(([^)]+)\)\]");
         var scopePattern = new Regex(@"class\s+(\w+_Scope_\w+)");
@@ -56,10 +70,11 @@ public static class CoverageReport
                         var scopeName = scopeMatch.Groups[1].Value;
                         for (int i = 0; i < pendingSpans.Length; i++)
                         {
-                            // Extract start_line from lower 32 bits
-                            int startLine = (int)((pendingSpans[i] & 0xFFFFFFFF) >> 16);
+                            long packed = pendingSpans[i];
+                            int startLine = (int)((packed & 0xFFFFFFFF) >> 16);
+                            int startCol = (int)(packed & 0xFFFF);
                             if (startLine > 0)
-                                map[(scopeName, i)] = startLine;
+                                map[(scopeName, i)] = (startLine, startCol);
                         }
                     }
                     pendingSpans = null;

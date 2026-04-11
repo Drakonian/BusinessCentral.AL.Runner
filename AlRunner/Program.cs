@@ -1111,9 +1111,9 @@ public static class SourceLineMapper
     public static Dictionary<string, List<(int CSharpLine, int AlLine)>> Mappings { get; } = new();
 
     /// <summary>
-    /// Direct (scope name, statement ID) -> AL line mapping. Populated during Build().
+    /// Direct (scope name, statement ID) -> (AL line, AL column) mapping. Populated during Build().
     /// </summary>
-    private static Dictionary<(string Scope, int StmtId), int> _sourceSpans = new();
+    private static Dictionary<(string Scope, int StmtId), (int Line, int Column)> _sourceSpans = new();
 
     /// <summary>
     /// Build the mapping from pre-rewrite C# (for SourceSpans) and post-rewrite C#
@@ -1126,9 +1126,9 @@ public static class SourceLineMapper
         Mappings.Clear();
         _sourceSpans.Clear();
 
-        // Step 1: Parse SourceSpans from pre-rewrite code to get (scope, stmtIndex) -> AL line
-        var sourceSpans = CoverageReport.ParseSourceSpans(preRewriteCSharp);
-        _sourceSpans = new Dictionary<(string Scope, int StmtId), int>(sourceSpans);
+        // Step 1: Parse SourceSpans from pre-rewrite code to get (scope, stmtIndex) -> (AL line, col)
+        var sourceSpans = CoverageReport.ParseSourceSpansWithColumns(preRewriteCSharp);
+        _sourceSpans = new Dictionary<(string Scope, int StmtId), (int Line, int Column)>(sourceSpans);
 
         // Step 2: For each post-rewrite file, scan for StmtHit(N) / CStmtHit(N) calls
         // and map the C# line to the AL line via the sourceSpans
@@ -1158,9 +1158,9 @@ public static class SourceLineMapper
                     if (stmtMatch.Success)
                     {
                         int stmtIndex = int.Parse(stmtMatch.Groups[1].Value);
-                        if (sourceSpans.TryGetValue((currentScope, stmtIndex), out int alLine))
+                        if (sourceSpans.TryGetValue((currentScope, stmtIndex), out var alPos))
                         {
-                            entries.Add((i + 1, alLine)); // C# lines are 1-based
+                            entries.Add((i + 1, alPos.Line)); // C# lines are 1-based
                         }
                     }
                 }
@@ -1216,8 +1216,19 @@ public static class SourceLineMapper
     /// </summary>
     public static int? GetAlLineFromStatement(string scopeName, int stmtId)
     {
-        if (_sourceSpans.TryGetValue((scopeName, stmtId), out int alLine))
-            return alLine;
+        if (_sourceSpans.TryGetValue((scopeName, stmtId), out var alPos))
+            return alPos.Line;
+        return null;
+    }
+
+    /// <summary>
+    /// Look up the AL source (line, column) from a scope name and statement ID.
+    /// Returns null if the scope/stmt isn't mapped.
+    /// </summary>
+    public static (int Line, int Column)? GetAlPositionFromStatement(string scopeName, int stmtId)
+    {
+        if (_sourceSpans.TryGetValue((scopeName, stmtId), out var alPos))
+            return alPos;
         return null;
     }
 
@@ -1238,7 +1249,12 @@ public static class SourceLineMapper
         if (alLine == null) return original;
 
         var baseName = Path.GetFileNameWithoutExtension(filePath);
-        return $"{original}  [AL line ~{alLine} in {baseName}]";
+        // C# column from Roslyn is 0-based; promote to 1-based so the output
+        // matches editor conventions. Column is advisory — it's the C# column
+        // of the rewritten code, not the original AL, but it's still a useful
+        // localisation hint within the AL line.
+        int csharpCol = lineSpan.StartLinePosition.Character + 1;
+        return $"{original}  [AL line ~{alLine} col {csharpCol} in {baseName}]";
     }
 }
 
@@ -1836,7 +1852,8 @@ public static class Executor
                         Status = AlRunner.TestStatus.Error,
                         Message = $"{inner!.GetType().Name}: {inner.Message}",
                         StackTrace = FormatStackFrames(inner),
-                        AlSourceLine = FindAlSourceLine(inner)
+                        AlSourceLine = FindAlSourceLine(inner),
+                        AlSourceColumn = FindAlSourceColumn(inner)
                     });
                 }
                 else
@@ -1847,7 +1864,8 @@ public static class Executor
                         Status = AlRunner.TestStatus.Fail,
                         Message = inner!.Message,
                         StackTrace = FormatStackFrames(inner),
-                        AlSourceLine = FindAlSourceLine(inner)
+                        AlSourceLine = FindAlSourceLine(inner),
+                        AlSourceColumn = FindAlSourceColumn(inner)
                     });
                 }
             }
@@ -1859,7 +1877,8 @@ public static class Executor
                     Status = AlRunner.TestStatus.Fail,
                     Message = ex.Message,
                     StackTrace = FormatStackFrames(ex),
-                    AlSourceLine = FindAlSourceLine(ex)
+                    AlSourceLine = FindAlSourceLine(ex),
+                    AlSourceColumn = FindAlSourceColumn(ex)
                 });
             }
         }
@@ -1935,38 +1954,22 @@ public static class Executor
     {
         var lastHit = AlRunner.Runtime.AlScope.LastStatementHit;
         if (lastHit == null) return null;
-
         var (typeName, stmtId) = lastHit.Value;
-
-        // Look up the AL line via SourceLineMapper's sourceSpan data
-        // The CoverageReport.ParseSourceSpans creates (scope, stmtId) -> alLine
-        // but SourceLineMapper stores C# line -> AL line per file.
-        // We need to find the C# line for this (scope, stmtId) from the mapper,
-        // then convert to AL line.
-        foreach (var (name, entries) in SourceLineMapper.Mappings)
-        {
-            // The entries map C# line -> AL line. We need to find the entry
-            // whose StmtHit matches our statement ID. Since entries are ordered
-            // and represent sequential statement hits, find the best match.
-            // We iterate all entries looking for one near our statement.
-        }
-
-        // Simpler: use the sourceSpans directly from CoverageReport cache
-        // For now, scan all mapping files for the entry matching the last statement
-        // The stmt ID order corresponds to the C# line order within each scope.
-        // Use the sourceSpans static data.
-        return FindAlLineFromSourceSpans(typeName, stmtId);
+        return SourceLineMapper.GetAlLineFromStatement(typeName, stmtId);
     }
 
-    private static int? FindAlLineFromSourceSpans(string scopeName, int stmtId)
+    /// <summary>
+    /// Get the AL source column from the last StmtHit that was executed before
+    /// the error. Column info is sourced from the same source-span encoding
+    /// used by <see cref="FindAlSourceLine"/>.
+    /// </summary>
+    private static int? FindAlSourceColumn(Exception _)
     {
-        // SourceLineMapper doesn't expose the raw (scope, stmtId) -> alLine mapping.
-        // We re-use CoverageReport.ParseSourceSpans which is already cached
-        // during pipeline execution.
-        // Instead, track it ourselves: the sourceSpans dictionary is static.
-        // Actually, SourceLineMapper.Build calls CoverageReport.ParseSourceSpans
-        // and uses it internally. Let's expose it.
-        return SourceLineMapper.GetAlLineFromStatement(scopeName, stmtId);
+        var lastHit = AlRunner.Runtime.AlScope.LastStatementHit;
+        if (lastHit == null) return null;
+        var (typeName, stmtId) = lastHit.Value;
+        var pos = SourceLineMapper.GetAlPositionFromStatement(typeName, stmtId);
+        return pos?.Column > 0 ? pos?.Column : null;
     }
 
     private static string? FormatStackFrames(Exception ex)
