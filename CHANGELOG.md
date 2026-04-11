@@ -39,8 +39,51 @@ All notable changes to this project are documented here. Format based on
   The existing `CoverageReport.ParseSourceSpans` encoding already
   carried columns; they were discarded.
   ([#13](https://github.com/StefanMaron/BusinessCentral.AL.Runner/issues/13))
+- **`Enum::X.Ordinals()` / `.Names()`** resolve against a transpile-time
+  `EnumRegistry` built from the AL source. BC inlines enums so runtime
+  reflection can't recover the member list. ([#17](https://github.com/StefanMaron/BusinessCentral.AL.Runner/issues/17))
+- **Enum-implements-interface dispatch** (`Flag := Strategy;`). BC stores
+  the NavOption directly in the interface handle; `MockInterfaceHandle`
+  now intercepts it, looks up the per-value
+  `Implementation = "Iface" = "Codeunit"` mapping in `EnumRegistry`,
+  and resolves the codeunit through the new `CodeunitNameRegistry`.
+  ([#20](https://github.com/StefanMaron/BusinessCentral.AL.Runner/issues/20))
+- **Table `InitValue` defaults** applied by `Rec.Init()` via a new
+  `TableInitValueRegistry` — supports Boolean, Integer, Decimal, Text
+  and Enum member init values.
+  ([#18](https://github.com/StefanMaron/BusinessCentral.AL.Runner/issues/18))
+- **FlowField `exist()` `CalcFields`** evaluated against in-memory
+  tables via a new `CalcFormulaRegistry`. Supports
+  `where(field = field(...))` and `where(field = const(...))`
+  conditions; `count` / `sum` / `lookup` still return defaults.
+  ([#15](https://github.com/StefanMaron/BusinessCentral.AL.Runner/issues/15))
+- **`NumberSequence`** replaced with a process-local
+  `MockNumberSequence` keyed by name. `Exists` / `Insert` / `Next` /
+  `Current` / `Restart` no longer throw `NullReferenceException` via
+  `NavSession`. ([#14](https://github.com/StefanMaron/BusinessCentral.AL.Runner/issues/14))
+- **`Page "X"` local variables** transpile to a `MockFormHandle`
+  stub (like the existing `MockInterfaceHandle` / `MockRecordRef`).
+  ([#21](https://github.com/StefanMaron/BusinessCentral.AL.Runner/issues/21))
 
 ### Fixed
+- **`SetFilter` AND operator (`&`)** — AL filter expressions with AND
+  chains were silently OR-ed, matching too many rows.
+  `MatchesFilterExpression` now splits on `|` (OR) first, then on
+  `&` (AND) inside each alternative, matching BC's precedence.
+  Wildcards, `..` ranges, `@` case-insensitive, and per-field
+  AND-across-fields all still work. `%1..%n` placeholder substitution
+  covered for integer and text values, including inside mixed AND/OR
+  precedence expressions.
+  ([#19](https://github.com/StefanMaron/BusinessCentral.AL.Runner/issues/19))
+- **`Page.Run(Page::X, Rec)` / `Page.RunModal`** with fully-qualified
+  `NavForm` method access, and `Page "X"` local variable initialisation
+  via `NavFormHandle` — both no longer cascade-exclude the containing
+  codeunit. (Follow-up to #6, with a real repro via #21.)
+- **`RecordRef` 3-arg `Open(tableId, temporary, company)`** now has
+  matching `ALOpen(CompilationTarget, int, bool, string)` overloads,
+  and `ALIsEmpty` is exposed as a property to match BC's lowering of
+  `!recRef.IsEmpty`.
+  ([#16](https://github.com/StefanMaron/BusinessCentral.AL.Runner/issues/16))
 - `AL0791 namespace unknown` on an unused `using` directive no longer
   blocks compilation; added to the ignored-error set alongside
   `AL0432` / `AL0433`. Genuine unresolved uses still surface as
