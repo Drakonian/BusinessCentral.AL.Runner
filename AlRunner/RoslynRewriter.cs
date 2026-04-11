@@ -734,6 +734,14 @@ public MockCurrPage CurrPage { get; } = new MockCurrPage();
         if (text == "ALNumberSequence")
             return node.WithIdentifier(SyntaxFactory.Identifier("MockNumberSequence"));
 
+        // ALNavApp -> MockNavApp
+        // The real type's ALGetModuleInfo reaches into
+        // Microsoft.Dynamics.Nav.CodeAnalysis, which isn't shipped with
+        // al-runner — any NavApp.GetModuleInfo/GetCurrentModuleInfo call
+        // crashes with an assembly-load failure under standalone mode.
+        if (text == "ALNavApp")
+            return node.WithIdentifier(SyntaxFactory.Identifier("MockNavApp"));
+
         // NavFormHandle -> MockFormHandle
         // BC emits `Page "X"` AL variables as `NavFormHandle p` fields with
         // `new NavFormHandle(this, pageId)` initializers — both args would
