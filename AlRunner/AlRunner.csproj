@@ -22,10 +22,12 @@
     <RepositoryUrl>https://github.com/StefanMaron/MSDyn365BC.AL.Runner</RepositoryUrl>
     <PackageTags>business-central;al;unit-test;runner</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageReleaseNotes>See CHANGELOG.md in the package or https://github.com/StefanMaron/BusinessCentral.AL.Runner/blob/main/CHANGELOG.md</PackageReleaseNotes>
   </PropertyGroup>
 
   <ItemGroup>
     <None Include="../README.md" Pack="true" PackagePath="/" />
+    <None Include="../CHANGELOG.md" Pack="true" PackagePath="/" />
   </ItemGroup>
 
   <PropertyGroup>
