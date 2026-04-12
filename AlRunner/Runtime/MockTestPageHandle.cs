@@ -44,6 +44,29 @@ public class MockTestPageHandle
     public void ALTrap() { }
 
     /// <summary>
+    /// Returns the page caption. Stub returns "TestPage" since the runner
+    /// does not have page metadata infrastructure.
+    /// </summary>
+    public string ALCaption => "TestPage";
+
+    /// <summary>
+    /// Navigates to the first record on the page. Stub returns true.
+    /// </summary>
+    public bool ALFirst() => true;
+
+    /// <summary>
+    /// Navigates to the record matching the given key values. Stub returns true.
+    /// BC emits: ALGoToKey(DataError.TrapError, ALCompiler.ToNavValue(...))
+    /// </summary>
+    public bool ALGoToKey(DataError errorLevel, params NavValue[] keyValues) => true;
+
+    /// <summary>
+    /// Returns a filter object for the TestPage. BC emits:
+    ///   tP.ALFilter.ALSetFilter(fieldNo, filterValue)
+    /// </summary>
+    public MockTestPageFilter ALFilter { get; } = new();
+
+    /// <summary>
     /// Returns a MockTestPageField for the given field hash.
     /// BC generates field hashes (not field IDs) for TestPage field access.
     /// The field stores values in memory for get/set assertions.
@@ -146,4 +169,19 @@ public class MockTestPageAction
             };
         }
     }
+}
+
+/// <summary>
+/// Mock for TestPage.Filter property. BC emits:
+///   tP.ALFilter.ALSetFilter(fieldNo, filterValue)
+///
+/// This is a no-op stub — the runner does not track TestPage-level filters.
+/// </summary>
+public class MockTestPageFilter
+{
+    /// <summary>
+    /// Sets a filter on the given field. No-op in standalone mode.
+    /// BC emits: ALSetFilter(fieldNo, filterExpression)
+    /// </summary>
+    public void ALSetFilter(int fieldNo, string filterExpression) { }
 }

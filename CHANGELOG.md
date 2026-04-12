@@ -7,6 +7,13 @@ All notable changes to this project are documented here. Format based on
 ## [Unreleased]
 
 ### Added
+- **`TestPage.Caption`, `.First()`, `.GoToKey()`, `.Filter.SetFilter()` stubs.**
+  `MockTestPageHandle` now supports `ALCaption` (returns `"TestPage"`), `ALFirst()`
+  (returns `true`), `ALGoToKey(DataError, params NavValue[])` (returns `true`), and
+  `ALFilter` property returning `MockTestPageFilter` with `ALSetFilter(int, string)`
+  no-op. These previously caused CS1061 compilation errors when test codeunits used
+  TestPage navigation/filter members. Tested by `tests/74-testpage-navigation/`
+  (6 test cases). ([#37](https://github.com/StefanMaron/BusinessCentral.AL.Runner/issues/37))
 - **`TestPage` field `Caption` property.** `MockTestPageField.ALCaption` returns
   a stub empty string, matching the BC compiler's `tP.GetField(hash).ALCaption`
   call pattern. Previously caused CS1061 compilation error.

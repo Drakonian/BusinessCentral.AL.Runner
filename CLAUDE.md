@@ -84,9 +84,10 @@ These are the BC runtime types replaced in standalone mode:
 | `AlCompat` | `ALCompiler`, `NavFormatEvaluateHelper` | Type conversion helpers; ALRandomize/ALRandom. |
 | `MockRecordRef` | `NavRecordRef` | RecordRef backed by MockRecordHandle. Open/Close, Field, Insert/Modify/Delete, FindSet/Next, GetTable/SetTable. |
 | `MockFieldRef` | `NavFieldRef` | FieldRef with ALValue get/set, ALNumber, ALSetRange, ALSetFilter, ALValidate. |
-| `MockTestPageHandle` | `NavTestPageHandle` | TestPage variable mock. OpenEdit/OpenView/OpenNew/Close/Trap lifecycle; GetField for field access; GetBuiltInAction for OK/Cancel. Tracks ModalResult for RunModal interception. |
-| `MockTestPageField` | TestPage field | ALSetValue/ALValue for field get/set on TestPage fields. |
+| `MockTestPageHandle` | `NavTestPageHandle` | TestPage variable mock. OpenEdit/OpenView/OpenNew/Close/Trap lifecycle; GetField for field access; GetBuiltInAction for OK/Cancel. Tracks ModalResult for RunModal interception. Caption, First(), GoToKey(), Filter.SetFilter() stubs. |
+| `MockTestPageField` | TestPage field | ALSetValue/ALValue for field get/set on TestPage fields. ALCaption stub. |
 | `MockTestPageAction` | TestPage action | ALInvoke for OK/Cancel/Close built-in actions. Sets parent handle's ModalResult (OK→LookupOK, Cancel→LookupCancel). |
+| `MockTestPageFilter` | TestPage filter | ALSetFilter(fieldNo, filterExpression) no-op for TestPage.Filter.SetFilter() calls. |
 | `MockFormHandle` | `NavFormHandle` | Page variable mock. RunModal() dispatches to ModalPageHandler via HandlerRegistry, returns FormResult. |
 | `HandlerRegistry` | BC test framework | Dispatches ConfirmHandler/MessageHandler/ModalPageHandler from [NavTest].Handlers to registered handler methods. |
 
@@ -328,7 +329,12 @@ These have been implemented and are tested by the test suite:
       and returns the `FormResult` set by OK/Cancel action invocation. Missing handler throws
       a descriptive error.
     - Handler registration via `[NavTest].Handlers` attribute on test methods
-    Tested by `tests/71-testpage/` (13 test cases) and `tests/73-modal-handler/` (3 test cases).
+    - `Caption` property (stub returns `"TestPage"`)
+    - `First()` navigation (stub returns `true`)
+    - `GoToKey(keyValues...)` navigation (stub returns `true`)
+    - `Filter.SetFilter(fieldNo, filterExpression)` no-op via `MockTestPageFilter`
+    Tested by `tests/71-testpage/` (13 test cases), `tests/73-modal-handler/` (3 test cases),
+    and `tests/74-testpage-navigation/` (6 test cases).
 
 ## Remaining Gaps
 
