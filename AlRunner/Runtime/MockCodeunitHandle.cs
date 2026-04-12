@@ -147,9 +147,36 @@ public class MockCodeunitHandle
                 if (scopeIdx < 0) continue;
                 var methodName = scopeName.Substring(0, scopeIdx);
 
-                // Find the public method on the codeunit class
-                var method = codeunitType.GetMethod(methodName,
-                    BindingFlags.Public | BindingFlags.Instance);
+                // Find the public method on the codeunit class.
+                // For overloaded AL procedures, the BC compiler emits C# methods with the
+                // member ID appended: "ProcessJson" (first) and "ProcessJson_2101255952"
+                // (second). The scope class is "ProcessJson_Scope_2101255952" for both,
+                // so methodName extracted above is always the base name "ProcessJson".
+                // Try the exact name first; if not found or ambiguous, try the suffixed
+                // variant "MethodName_MemberId" that the BC compiler uses for overloads.
+                var suffixedName = $"{methodName}_{absMemberId}";
+                var method = codeunitType.GetMethods(BindingFlags.Public | BindingFlags.Instance)
+                    .FirstOrDefault(m => m.Name == suffixedName);
+                if (method == null)
+                {
+                    // No suffixed overload — find by base name, matching arg count
+                    var candidates = codeunitType.GetMethods(BindingFlags.Public | BindingFlags.Instance)
+                        .Where(m => m.Name == methodName)
+                        .ToArray();
+                    if (candidates.Length == 1)
+                    {
+                        method = candidates[0];
+                    }
+                    else if (candidates.Length > 1)
+                    {
+                        // Multiple overloads with the same base name: pick by arg count + type score
+                        method = candidates
+                            .Where(m => m.GetParameters().Length == args.Length)
+                            .OrderByDescending(m => ScoreMethodMatch(m, args))
+                            .FirstOrDefault()
+                            ?? candidates.FirstOrDefault();
+                    }
+                }
                 if (method == null) continue;
 
                 // Convert args to match parameter types

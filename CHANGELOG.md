@@ -6,6 +6,15 @@ All notable changes to this project are documented here. Format based on
 
 ## [Unreleased]
 
+### Fixed
+- **Overloaded procedures with `var List of [T]` parameters** — cross-codeunit
+  `Invoke` now resolves the correct overload when the BC compiler emits suffixed
+  C# method names (e.g., `ProcessJson_2101255952`) for overloaded AL procedures.
+  Previously, `MockCodeunitHandle.Invoke` used only the base method name, picking
+  the wrong overload and causing `Object of type 'ByRef<NavList<T>>' cannot be
+  converted to type 'T'` reflection errors.
+  Tested by `tests/83-list-byref/` (9 test cases).
+
 ### Added
 - **`RecordRef.FieldIndex(n)`** returns a `MockFieldRef` for the nth registered
   field (sorted by field number). Out-of-range index returns a stub with field
