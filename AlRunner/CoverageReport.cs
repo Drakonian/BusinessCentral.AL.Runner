@@ -72,9 +72,10 @@ public static class CoverageReport
                         {
                             long packed = pendingSpans[i];
                             // SourceSpans encode 0-based line/col; convert to 1-based
-                            int startLine = (int)((packed & 0xFFFFFFFF) >> 16) + 1;
+                            int rawLine = (int)((packed & 0xFFFFFFFF) >> 16);
+                            int startLine = rawLine + 1;
                             int startCol = (int)(packed & 0xFFFF) + 1;
-                            if (startLine > 0)
+                            if (rawLine >= 0)
                                 map[(scopeName, i)] = (startLine, startCol);
                         }
                     }

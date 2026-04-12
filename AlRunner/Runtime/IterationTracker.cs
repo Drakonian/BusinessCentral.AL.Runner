@@ -18,8 +18,6 @@ public static class IterationTracker
     private static readonly Stack<ActiveLoop> _loopStack = new();
     private static int _nextLoopId;
 
-    private static List<int> _currentIterationHits = new();
-
     public static bool Enabled => _enabled;
     public static void Enable() => _enabled = true;
     public static void Disable() => _enabled = false;
@@ -31,14 +29,13 @@ public static class IterationTracker
     public static void RecordHit(int stmtId)
     {
         if (!_enabled || _loopStack.Count == 0) return;
-        _currentIterationHits.Add(stmtId);
+        _loopStack.Peek().CurrentIterationHits.Add(stmtId);
     }
 
     public static void Reset()
     {
         _loops.Clear();
         _loopStack.Clear();
-        _currentIterationHits.Clear();
         _nextLoopId = 0;
     }
 
@@ -91,7 +88,7 @@ public static class IterationTracker
         active.CurrentIteration++;
         active.ValueSnapshotBefore = ValueCapture.GetCaptures().Count;
         active.MessageSnapshotBefore = MessageCapture.GetMessages().Count;
-        _currentIterationHits.Clear();
+        active.CurrentIterationHits.Clear();
     }
 
     /// <summary>
@@ -136,7 +133,7 @@ public static class IterationTracker
             iterMessages.Add(allMessages[i]);
 
         // Lines hit during this iteration
-        var iterLines = _currentIterationHits.Distinct().ToList();
+        var iterLines = active.CurrentIterationHits.Distinct().ToList();
 
         active.Record.Steps.Add(new IterationStep
         {
@@ -184,5 +181,6 @@ public static class IterationTracker
         public int CurrentIteration { get; set; }
         public int ValueSnapshotBefore { get; set; }
         public int MessageSnapshotBefore { get; set; }
+        public List<int> CurrentIterationHits { get; } = new();
     }
 }

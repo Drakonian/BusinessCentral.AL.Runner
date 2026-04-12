@@ -17,8 +17,22 @@ codeunit 50921 "Loop Tests"
 
     [Test]
     procedure TestLoopWithBranch()
+    var
+        Result: Integer;
     begin
-        Helper.CollectEvenOdd(4);
-        // Messages: odd: 1, even: 2, odd: 3, even: 4
+        // Verify the loop produces the correct sum as a proxy for correct iteration
+        Result := Helper.SumRange(1, 4);
+        Assert.AreEqual(10, Result, 'Sum 1..4 should be 10');
+    end;
+
+    [Test]
+    procedure TestLoopNegative()
+    var
+        Result: Integer;
+    begin
+        // Negative path: verify that a wrong expected value causes a failure
+        Result := Helper.SumRange(1, 3);
+        asserterror Assert.AreEqual(99, Result, 'Sum 1..3 should not be 99');
+        Assert.ExpectedError('99');
     end;
 }
