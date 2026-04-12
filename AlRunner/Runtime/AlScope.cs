@@ -607,6 +607,22 @@ public static class AlCompat
     }
 
     /// <summary>
+    /// Replacement for ALSystemString.ALStrSubstNo.
+    /// AL StrSubstNo replaces %1, %2, ... %N placeholders with formatted argument values.
+    /// The real BC implementation routes through NavValueFormatter.Format(NavSession, ...) which
+    /// requires NavSession and crashes with NullReferenceException in the runner context.
+    /// We use AlCompat.Format() which already handles all BC value types without NavSession.
+    /// </summary>
+    public static string StrSubstNo(string fmt, params Microsoft.Dynamics.Nav.Runtime.NavValue[] args)
+    {
+        if (fmt == null) return "";
+        var result = fmt;
+        for (int i = 0; i < args.Length; i++)
+            result = result.Replace("%" + (i + 1), Format(args[i]));
+        return result;
+    }
+
+    /// <summary>
     /// Format with AL format string (e.g. '&lt;Year4&gt;-&lt;Month,2&gt;-&lt;Day,2&gt;').
     /// The BC transpiler emits NavFormatEvaluateHelper.Format(session, value, length, formatString)
     /// which the rewriter strips the session arg from, producing AlCompat.Format(value, length, formatString).

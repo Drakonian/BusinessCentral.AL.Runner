@@ -282,6 +282,12 @@ These have been implemented and are tested by the test suite:
    constructor (parent scope), nested interface delegation, and `NavScope`
    parameter conversion in cross-codeunit dispatch.
 
+9. **StrSubstNo with integer (and other NavValue) arguments** — `ALSystemString.ALStrSubstNo`
+   is intercepted by `RoslynRewriter` and redirected to `AlCompat.StrSubstNo`, which
+   formats each `%1`/`%2`/… placeholder using `AlCompat.Format()`. This avoids the
+   `NullReferenceException` in `NavIntegerFormatter.FormatWithFormatNumber` that occurs
+   when `NavSession` is null in the runner context. Tested by `tests/67-strsubstno-integer/`.
+
 ## Remaining Gaps
 
 These are gaps that remain for full production use:

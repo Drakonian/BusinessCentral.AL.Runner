@@ -1584,6 +1584,19 @@ public MockCurrPage CurrPage { get; } = new MockCurrPage();
                 }
             }
 
+            // ALSystemString.ALStrSubstNo(fmt, arg1, arg2, ...) -> AlCompat.StrSubstNo(fmt, arg1, arg2, ...)
+            // The real BC ALStrSubstNo routes each argument through NavValueFormatter.Format(NavSession, ...)
+            // which crashes with NullReferenceException when NavSession is null (runner context).
+            // AlCompat.StrSubstNo uses AlCompat.Format() instead, which handles all BC types without NavSession.
+            if (exprText == "ALSystemString" && methodName == "ALStrSubstNo")
+            {
+                return visited.WithExpression(
+                    SyntaxFactory.MemberAccessExpression(
+                        SyntaxKind.SimpleMemberAccessExpression,
+                        SyntaxFactory.IdentifierName("AlCompat"),
+                        SyntaxFactory.IdentifierName("StrSubstNo")));
+            }
+
             // ALSystemDate.ALWorkDate(null!) -> ALSystemDate.ALWorkDate(NavDate.Default)
             // The rewriter turns this.Session -> null!, which makes ALWorkDate ambiguous between
             // the NavSession and NavDate overloads. We disambiguate to the NavDate overload.
