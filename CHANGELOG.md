@@ -38,6 +38,14 @@ All notable changes to this project are documented here. Format based on
   (fixes #43)
 
 ### Fixed
+- **NavScope conversion gap in cross-codeunit dispatch.** When an AL method
+  returns a Record or Interface, the BC compiler adds a hidden `NavScope`
+  parameter for ownership tracking. Same-codeunit calls pass the calling
+  scope object, but after rewriting scopes extend `AlScope` (not `NavScope`),
+  causing Roslyn CS1503 error. The rewriter now replaces `NavScope` with
+  `object` so any scope or null can be passed. Tested by
+  `tests/76-navscope-dispatch/` (3 test cases).
+  (fixes [#44](https://github.com/StefanMaron/BusinessCentral.AL.Runner/issues/44))
 - **`Codeunit.Run()` bool return value.** `MockCodeunitHandle.RunCodeunit` now
   accepts a `DataError` parameter and returns `bool`. When the BC compiler emits
   `NavCodeunit.RunCodeunit(DataError.TrapError, id, rec)` for

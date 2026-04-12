@@ -773,6 +773,16 @@ public MockCurrPage CurrPage { get; } = new MockCurrPage();
         if (text == "NavFieldRef")
             return node.WithIdentifier(SyntaxFactory.Identifier("MockFieldRef"));
 
+        // NavScope -> object
+        // The BC compiler adds a hidden NavScope γReturnValueParent parameter
+        // to methods that return a Record or Interface. The parameter is used
+        // for ownership tracking. After rewriting, scope classes extend AlScope
+        // (not NavScope), so direct same-codeunit calls fail with CS1503. We
+        // replace NavScope with object so any scope or null can be passed.
+        if (text == "NavScope")
+            return SyntaxFactory.PredefinedType(SyntaxFactory.Token(SyntaxKind.ObjectKeyword))
+                .WithTriviaFrom(node);
+
         // NavVariant -> MockVariant (Variant in AL needs Default/ALAssign methods)
         if (text == "NavVariant")
             return node.WithIdentifier(SyntaxFactory.Identifier("MockVariant"));
