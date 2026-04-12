@@ -218,7 +218,8 @@ test executor that needs no BC service tier, Docker, SQL Server, or license.
 - IsolatedStorage (in-memory key-value store: Set, Get, Delete, Contains)
 - TextBuilder (Append, AppendLine, ToText)
 - RecordRef / FieldRef — Open, Close, Field(n).Value get/set, Insert, Modify,
-  Delete, DeleteAll, FindSet+Next iteration, GetTable/SetTable, SetRange/SetFilter
+  Delete, DeleteAll, FindSet+Next iteration, GetTable/SetTable, SetRange/SetFilter,
+  RecRef := OtherRecRef assignment
 - Format() / Evaluate() type conversions
 - Built-in session functions: CompanyName, UserId, TenantId, SerialNumber (return empty string)
 - Partial compilation (skips unsupported object types like XMLport)

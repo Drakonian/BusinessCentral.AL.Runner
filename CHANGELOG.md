@@ -6,6 +6,12 @@ All notable changes to this project are documented here. Format based on
 
 ## [Unreleased]
 
+### Fixed
+- **RecordRef assignment (`:=` operator).** `MockRecordRef` was missing the
+  `ALAssign` method that the BC compiler emits for `RecRef2 := RecRef1`. This
+  caused a CS1061 compilation error excluding any codeunit that assigns one
+  RecordRef to another. Tested by `tests/72-recref-assign/`. (fixes #35, #36)
+
 ### Added
 - **TestPage support.** `NavTestPageHandle` is rewritten to `MockTestPageHandle`.
   Test codeunits can now use `TestPage "X"` variables with `OpenEdit()`,

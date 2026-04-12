@@ -235,6 +235,21 @@ public class MockRecordRef
     // -- IsTemporary --
     public bool ALIsTemporary => false;
 
+    // -- Assign (`:=` operator in AL, lowered to ALAssign by BC compiler) --
+    public void ALAssign(MockRecordRef other)
+    {
+        Number = other.Number;
+        if (other._handle != null)
+        {
+            _handle = new MockRecordHandle(Number);
+            _handle.ALCopy(other._handle);
+        }
+        else
+        {
+            _handle = null;
+        }
+    }
+
     // -- Copy --
     public void ALCopy(MockRecordRef source, bool shareFilters = false)
     {
