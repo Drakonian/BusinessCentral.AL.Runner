@@ -55,6 +55,23 @@ public class MockRecordRef
     public int ALGetNumber() => Number;
     public int ALNumber => Number;
 
+    // -- Name --
+
+    /// <summary>
+    /// ALName — returns the table name. Stub: "TableN" where N is the table ID.
+    /// Returns empty string when no table is open.
+    /// </summary>
+    public NavText ALName => Number == 0 ? new NavText("") : new NavText($"Table{Number}");
+
+    // -- SetLoadFields (no-op) --
+
+    /// <summary>
+    /// ALSetLoadFields — no-op in standalone mode. All fields are always in memory.
+    /// BC compiler emits <c>recRef.ALSetLoadFields(params int[] fieldNos)</c>.
+    /// </summary>
+    public void ALSetLoadFields(params int[] fieldNos) { }
+    public void ALSetLoadFields(DataError errorLevel, params int[] fieldNos) { }
+
     // -- Field access --
 
     /// <summary>

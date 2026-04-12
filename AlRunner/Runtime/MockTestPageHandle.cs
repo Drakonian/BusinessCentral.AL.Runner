@@ -101,6 +101,12 @@ public class MockTestPageField
     /// BC reads this to pass to Assert.AreEqual via ALCompiler.ToVariant.
     /// </summary>
     public NavValue ALValue => _value;
+
+    /// <summary>
+    /// ALCaption — returns the field caption. Stub: empty string.
+    /// BC emits <c>tP.GetField(hash).ALCaption</c> for TestPage field Caption reads.
+    /// </summary>
+    public NavText ALCaption => new NavText("");
 }
 
 /// <summary>

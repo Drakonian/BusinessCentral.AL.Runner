@@ -6,6 +6,23 @@ All notable changes to this project are documented here. Format based on
 
 ## [Unreleased]
 
+### Added
+- **`TestPage` field `Caption` property.** `MockTestPageField.ALCaption` returns
+  a stub empty string, matching the BC compiler's `tP.GetField(hash).ALCaption`
+  call pattern. Previously caused CS1061 compilation error.
+  ([#38](https://github.com/StefanMaron/BusinessCentral.AL.Runner/issues/38))
+- **`RecordRef.SetLoadFields` no-op.** `MockRecordRef.ALSetLoadFields(DataError,
+  params int[])` accepts the BC compiler's lowered call and does nothing — all
+  fields are always in memory in standalone mode. Previously caused CS1061.
+  ([#39](https://github.com/StefanMaron/BusinessCentral.AL.Runner/issues/39))
+- **`RecordRef.Name` stub.** `MockRecordRef.ALName` returns `"TableN"` (where N
+  is the table ID) or empty string when no table is open. Previously caused
+  CS1061 compilation error.
+  ([#40](https://github.com/StefanMaron/BusinessCentral.AL.Runner/issues/40))
+
+  Tested by `tests/74-mock-stubs/` (8 test cases covering all 3 additions plus
+  the existing `Page.Update()` no-op (#41)).
+
 ### Fixed
 - **RecordRef assignment (`:=` operator).** `MockRecordRef` was missing the
   `ALAssign` method that the BC compiler emits for `RecRef2 := RecRef1`. This
