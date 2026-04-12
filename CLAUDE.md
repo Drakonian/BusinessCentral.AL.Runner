@@ -338,7 +338,8 @@ al-runner --run TestMyThing ./src ./test      # run a single test procedure by n
 al-runner --capture-values ./src ./test       # capture variable values after each test
 al-runner --server                            # long-running JSON-RPC daemon (stdin/stdout)
 al-runner -e 'codeunit 99 X { trigger OnRun() begin Message('"'"'hi'"'"'); end; }'
-al-runner --generate-stubs .alpackages ./stubs # scaffold stubs from .app packages
+al-runner --generate-stubs .alpackages ./stubs             # scaffold stubs (all codeunits)
+al-runner --generate-stubs .alpackages ./stubs ./src ./test # stubs filtered to referenced objects
 al-runner --guide                             # print test-writing guide for AI agents
 al-runner -h                                  # help
 ```

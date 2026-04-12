@@ -7,6 +7,11 @@ All notable changes to this project are documented here. Format based on
 ## [Unreleased]
 
 ### Added
+- **`--generate-stubs` source filtering.** When source directories are provided
+  (`--generate-stubs <packages-dir> <output-dir> <src-dir> ...`), only codeunits
+  actually referenced in the AL source are generated. Procedure-level filtering
+  further limits each stub to only the methods called in source. Falls back to
+  generating all codeunits when no source dirs are given (backward compatible).
 - **`--generate-stubs` CLI command.** Scaffolds empty AL stub files from `.app`
   symbol packages. Reads `SymbolReference.json` from each `.app` file in the
   packages directory and emits one `.al` file per codeunit with correct procedure

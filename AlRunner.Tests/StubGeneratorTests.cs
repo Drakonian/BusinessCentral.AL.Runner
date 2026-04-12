@@ -235,6 +235,191 @@ public class StubGeneratorTests
         }
     }
 
+    // --- Source-filtered stub generation tests ---
+
+    [Fact]
+    public void Generate_WithSourceDirs_OnlyGeneratesReferencedCodeunits()
+    {
+        if (!HasTestApps) return;
+
+        var outputDir = Path.Combine(Path.GetTempPath(), "al-runner-stub-filtered-" + Guid.NewGuid().ToString("N")[..8]);
+        var singlePkgDir = Path.Combine(Path.GetTempPath(), "al-runner-stub-pkg-" + Guid.NewGuid().ToString("N")[..8]);
+        var srcDir = Path.Combine(Path.GetTempPath(), "al-runner-stub-src-" + Guid.NewGuid().ToString("N")[..8]);
+        try
+        {
+            Directory.CreateDirectory(singlePkgDir);
+            File.Copy(TestLibrariesApp, Path.Combine(singlePkgDir, Path.GetFileName(TestLibrariesApp)));
+
+            // Create a source dir with one .al file that references "Library - Sales" only
+            Directory.CreateDirectory(srcDir);
+            File.WriteAllText(Path.Combine(srcDir, "test.al"), @"
+codeunit 50100 ""My Test""
+{
+    var LibSales: Codeunit ""Library - Sales"";
+
+    trigger OnRun()
+    begin
+        LibSales.CreateSalesHeader(SalesHeader, SalesHeader.""Document Type""::Order);
+    end;
+}
+");
+
+            var result = StubGenerator.Generate(singlePkgDir, outputDir, new[] { srcDir });
+
+            // Should have generated only the referenced codeunit(s), not all 164
+            Assert.True(result.Generated > 0, "Should have generated at least 1 stub");
+            Assert.True(result.SkippedNotReferenced > 0, "Should have skipped unreferenced codeunits");
+            Assert.True(result.Generated < result.TotalAvailable,
+                $"Generated {result.Generated} should be less than total {result.TotalAvailable}");
+            Assert.True(result.SourceFileCount == 1, $"Expected 1 source file, got {result.SourceFileCount}");
+
+            // Library - Sales (130509) should exist
+            var salesStub = Path.Combine(outputDir, "Cod130509.Library-Sales.al");
+            Assert.True(File.Exists(salesStub), "Library - Sales stub should exist (referenced in source)");
+
+            Directory.Delete(singlePkgDir, true);
+        }
+        finally
+        {
+            if (Directory.Exists(outputDir)) Directory.Delete(outputDir, true);
+            if (Directory.Exists(srcDir)) Directory.Delete(srcDir, true);
+        }
+    }
+
+    [Fact]
+    public void Generate_WithoutSourceDirs_GeneratesAllCodeunits()
+    {
+        if (!HasTestApps) return;
+
+        var outputDir = Path.Combine(Path.GetTempPath(), "al-runner-stub-all-" + Guid.NewGuid().ToString("N")[..8]);
+        var singlePkgDir = Path.Combine(Path.GetTempPath(), "al-runner-stub-pkg-" + Guid.NewGuid().ToString("N")[..8]);
+        try
+        {
+            Directory.CreateDirectory(singlePkgDir);
+            File.Copy(TestLibrariesApp, Path.Combine(singlePkgDir, Path.GetFileName(TestLibrariesApp)));
+
+            // No source dirs — should generate all
+            var result = StubGenerator.Generate(singlePkgDir, outputDir);
+
+            Assert.True(result.SkippedNotReferenced == 0, "Without source dirs, nothing should be skipped as unreferenced");
+            Assert.Equal(0, result.SourceFileCount);
+
+            Directory.Delete(singlePkgDir, true);
+        }
+        finally
+        {
+            if (Directory.Exists(outputDir)) Directory.Delete(outputDir, true);
+        }
+    }
+
+    [Fact]
+    public void Generate_WithSourceDirs_FiltersProcedures()
+    {
+        if (!HasTestApps) return;
+
+        var outputDir = Path.Combine(Path.GetTempPath(), "al-runner-stub-procfilter-" + Guid.NewGuid().ToString("N")[..8]);
+        var singlePkgDir = Path.Combine(Path.GetTempPath(), "al-runner-stub-pkg-" + Guid.NewGuid().ToString("N")[..8]);
+        var srcDir = Path.Combine(Path.GetTempPath(), "al-runner-stub-src-" + Guid.NewGuid().ToString("N")[..8]);
+        try
+        {
+            Directory.CreateDirectory(singlePkgDir);
+            File.Copy(TestLibrariesApp, Path.Combine(singlePkgDir, Path.GetFileName(TestLibrariesApp)));
+
+            // Create source that references Library - Sales but only calls CreateSalesHeader
+            Directory.CreateDirectory(srcDir);
+            File.WriteAllText(Path.Combine(srcDir, "test.al"), @"
+codeunit 50100 ""My Test""
+{
+    var LibSales: Codeunit ""Library - Sales"";
+
+    trigger OnRun()
+    begin
+        LibSales.CreateSalesHeader(SalesHeader, SalesHeader.""Document Type""::Order);
+    end;
+}
+");
+
+            var result = StubGenerator.Generate(singlePkgDir, outputDir, new[] { srcDir });
+
+            var salesStub = Path.Combine(outputDir, "Cod130509.Library-Sales.al");
+            Assert.True(File.Exists(salesStub), "Library - Sales stub should exist");
+
+            var content = File.ReadAllText(salesStub);
+            // CreateSalesHeader should be present (it's called in source)
+            Assert.Contains("CreateSalesHeader", content);
+
+            // Now also generate without filtering to compare procedure count
+            var outputDirAll = Path.Combine(Path.GetTempPath(), "al-runner-stub-procfilter-all-" + Guid.NewGuid().ToString("N")[..8]);
+            try
+            {
+                var resultAll = StubGenerator.Generate(singlePkgDir, outputDirAll);
+                var salesStubAll = Path.Combine(outputDirAll, "Cod130509.Library-Sales.al");
+                var contentAll = File.ReadAllText(salesStubAll);
+
+                // The filtered stub should have fewer procedures than the unfiltered one
+                int filteredProcCount = content.Split("procedure ").Length - 1;
+                int allProcCount = contentAll.Split("procedure ").Length - 1;
+                Assert.True(filteredProcCount < allProcCount,
+                    $"Filtered stub has {filteredProcCount} procedures, unfiltered has {allProcCount} — expected fewer in filtered");
+            }
+            finally
+            {
+                if (Directory.Exists(outputDirAll)) Directory.Delete(outputDirAll, true);
+            }
+
+            Directory.Delete(singlePkgDir, true);
+        }
+        finally
+        {
+            if (Directory.Exists(outputDir)) Directory.Delete(outputDir, true);
+            if (Directory.Exists(srcDir)) Directory.Delete(srcDir, true);
+        }
+    }
+
+    [Fact]
+    public void IsCodeunitReferenced_MatchesByName()
+    {
+        var cu = new StubGenerator.CodeunitSymbol(130509, "Library - Sales", new List<StubGenerator.MethodSymbol>());
+        var sourceText = "var LibSales: Codeunit \"Library - Sales\";";
+        Assert.True(StubGenerator.IsCodeunitReferenced(cu, sourceText));
+    }
+
+    [Fact]
+    public void IsCodeunitReferenced_MatchesById()
+    {
+        var cu = new StubGenerator.CodeunitSymbol(130509, "Library - Sales", new List<StubGenerator.MethodSymbol>());
+        var sourceText = "// some reference to codeunit 130509 here";
+        Assert.True(StubGenerator.IsCodeunitReferenced(cu, sourceText));
+    }
+
+    [Fact]
+    public void IsCodeunitReferenced_ReturnsFalseWhenNotReferenced()
+    {
+        var cu = new StubGenerator.CodeunitSymbol(130509, "Library - Sales", new List<StubGenerator.MethodSymbol>());
+        var sourceText = "var X: Codeunit \"Library - Purchases\";";
+        Assert.False(StubGenerator.IsCodeunitReferenced(cu, sourceText));
+    }
+
+    [Fact]
+    public void FilterProcedures_KeepsOnlyCalledMethods()
+    {
+        var methods = new List<StubGenerator.MethodSymbol>
+        {
+            new("CreateSalesHeader", new List<StubGenerator.ParameterSymbol>(), null),
+            new("CreateSalesLine", new List<StubGenerator.ParameterSymbol>(), null),
+            new("PostSalesDocument", new List<StubGenerator.ParameterSymbol>(), null),
+        };
+        var cu = new StubGenerator.CodeunitSymbol(130509, "Library - Sales", methods);
+        var sourceText = "LibSales.CreateSalesHeader(X, Y);\nLibSales.PostSalesDocument(Z);";
+
+        var filtered = StubGenerator.FilterProcedures(cu, sourceText);
+
+        Assert.Equal(2, filtered.Methods.Count);
+        Assert.Contains(filtered.Methods, m => m.Name == "CreateSalesHeader");
+        Assert.Contains(filtered.Methods, m => m.Name == "PostSalesDocument");
+        Assert.DoesNotContain(filtered.Methods, m => m.Name == "CreateSalesLine");
+    }
+
     [Fact]
     public void RenderType_HandlesAllCommonTypes()
     {

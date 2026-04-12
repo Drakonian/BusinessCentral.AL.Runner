@@ -40,8 +40,9 @@ if (args.Length == 0 || args.Any(a => a is "-h" or "--help"))
     Console.Error.WriteLine("  --iteration-tracking  Track per-iteration data for loops (requires --output-json)");
     Console.Error.WriteLine("  --run <procedure>     Run only the specified procedure by name");
     Console.Error.WriteLine("  --server              Start in server mode (JSON-RPC over stdin/stdout)");
-    Console.Error.WriteLine("  --generate-stubs <packages-dir> <output-dir>");
+    Console.Error.WriteLine("  --generate-stubs <packages-dir> <output-dir> [<src-dir> ...]");
     Console.Error.WriteLine("                        Generate empty AL stub files from .app symbol packages");
+    Console.Error.WriteLine("                        When source dirs given, only referenced codeunits are emitted");
     Console.Error.WriteLine("  --guide               Print test-writing guide for AI coding agents");
     Console.Error.WriteLine("  -h, --help            Show this help");
     Console.Error.WriteLine();
@@ -87,12 +88,25 @@ while (argIdx < args.Length)
             argIdx++;
             if (argIdx >= args.Length) { Console.Error.WriteLine("Error: --generate-stubs requires <packages-dir> <output-dir>"); return 1; }
             var outDir = Path.GetFullPath(args[argIdx]);
+            argIdx++;
+            // Remaining args are optional source directories
+            var srcDirs = new List<string>();
+            while (argIdx < args.Length && !args[argIdx].StartsWith("-"))
+            {
+                srcDirs.Add(Path.GetFullPath(args[argIdx]));
+                argIdx++;
+            }
             try
             {
-                var genResult = AlRunner.StubGenerator.Generate(pkgDir, outDir);
-                Console.Error.WriteLine($"Generated {genResult.Generated} stub files in {outDir}");
+                var genResult = AlRunner.StubGenerator.Generate(pkgDir, outDir, srcDirs.Count > 0 ? srcDirs : null);
+                if (genResult.SourceFileCount > 0)
+                    Console.Error.WriteLine($"Scanned {srcDirs.Count} source director{(srcDirs.Count == 1 ? "y" : "ies")} ({genResult.SourceFileCount} .al files)");
+                Console.Error.WriteLine($"Generated {genResult.Generated} stub files in {outDir}"
+                    + (genResult.SourceFileCount > 0 ? $"  (filtered from {genResult.TotalAvailable} available codeunits)" : ""));
                 if (genResult.SkippedExisting.Count > 0)
                     Console.Error.WriteLine($"  Skipped {genResult.SkippedExisting.Count} (already exist): {string.Join(", ", genResult.SkippedExisting)}");
+                if (genResult.SkippedNotReferenced > 0)
+                    Console.Error.WriteLine($"  Skipped {genResult.SkippedNotReferenced} (not referenced in source)");
                 if (genResult.SkippedNativeMock > 0)
                     Console.Error.WriteLine($"  Skipped {genResult.SkippedNativeMock} (natively mocked)");
                 if (genResult.SkippedNonCodeunit > 0)
@@ -303,15 +317,25 @@ al-runner --run TestMyProcedure ./src ./test              # run a single test by
 al-runner --capture-values ./src ./test                   # capture variable values after each test
 al-runner --iteration-tracking ./src ./test                   # track loop iterations
 al-runner --server                                         # long-running JSON-RPC daemon (stdin/stdout)
-al-runner --generate-stubs .alpackages ./stubs             # scaffold stubs from .app packages
+al-runner --generate-stubs .alpackages ./stubs             # scaffold stubs from .app packages (all codeunits)
+al-runner --generate-stubs .alpackages ./stubs ./src ./test  # only stubs referenced in source
 ```
 
 ### Generating stubs from .app packages
 
-Use `--generate-stubs <packages-dir> <output-dir>` to scaffold empty AL stub files
-from .app symbol packages. This reads SymbolReference.json from each .app file and
-emits one `.al` file per codeunit with correct procedure signatures, parameter types,
-and return types. Generated stubs have empty bodies — fill in implementations as needed.
+Use `--generate-stubs <packages-dir> <output-dir> [<src-dir> ...]` to scaffold empty
+AL stub files from .app symbol packages. This reads SymbolReference.json from each
+.app file and emits one `.al` file per codeunit with correct procedure signatures,
+parameter types, and return types. Generated stubs have empty bodies — fill in
+implementations as needed.
+
+When source directories are provided, only codeunits actually referenced in the AL
+source are generated. A codeunit is considered referenced if its name (case-insensitive)
+or numeric ID appears anywhere in the source .al files. Additionally, only procedures
+that appear to be called (name followed by `(`) are included in the stub.
+This dramatically reduces the number of generated stubs for large symbol packages.
+
+When no source directories are given, all codeunits are emitted (backward compatible).
 
 Codeunits that al-runner already mocks natively (e.g. codeunit 130 "Library Assert")
 are skipped automatically. Existing files in the output directory are never overwritten,

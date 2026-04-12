@@ -17,29 +17,41 @@ public static class StubGenerator
         int Generated,
         List<string> SkippedExisting,
         int SkippedNonCodeunit,
-        int SkippedNativeMock);
+        int SkippedNativeMock,
+        int SkippedNotReferenced,
+        int TotalAvailable,
+        int SourceFileCount);
 
     /// <summary>
     /// Scan all .app files in <paramref name="packagesDir"/>, extract codeunit symbols,
     /// and write one .al stub file per codeunit into <paramref name="outputDir"/>.
+    /// When <paramref name="sourceDirs"/> is provided and non-empty, only codeunits
+    /// referenced in the AL source are generated.
     /// </summary>
-    public static GenerateResult Generate(string packagesDir, string outputDir)
+    public static GenerateResult Generate(string packagesDir, string outputDir, IReadOnlyList<string>? sourceDirs = null)
     {
         if (!Directory.Exists(packagesDir))
             throw new DirectoryNotFoundException($"Packages directory not found: {packagesDir}");
 
         Directory.CreateDirectory(outputDir);
 
+        // Collect source text for filtering (if source dirs provided)
+        var (sourceTexts, sourceFileCount) = CollectSourceTexts(sourceDirs);
+        bool filtering = sourceTexts != null;
+
         var appFiles = Directory.GetFiles(packagesDir, "*.app", SearchOption.TopDirectoryOnly);
         int generated = 0;
         int skippedNonCodeunit = 0;
         int skippedNativeMock = 0;
+        int skippedNotReferenced = 0;
+        int totalAvailable = 0;
         var skippedExisting = new List<string>();
 
         foreach (var appFile in appFiles)
         {
             var (codeunits, nonCodeunitCount, appName) = ReadCodeunitsFromApp(appFile);
             skippedNonCodeunit += nonCodeunitCount;
+            totalAvailable += codeunits.Count;
 
             foreach (var cu in codeunits)
             {
@@ -48,6 +60,15 @@ public static class StubGenerator
                     skippedNativeMock++;
                     continue;
                 }
+
+                if (filtering && !IsCodeunitReferenced(cu, sourceTexts!))
+                {
+                    skippedNotReferenced++;
+                    continue;
+                }
+
+                // Filter procedures when source dirs are provided
+                var filteredCu = filtering ? FilterProcedures(cu, sourceTexts!) : cu;
 
                 var fileName = $"Cod{cu.Id}.{SanitizeFileName(cu.Name)}.al";
                 var filePath = Path.Combine(outputDir, fileName);
@@ -58,13 +79,72 @@ public static class StubGenerator
                     continue;
                 }
 
-                var content = RenderCodeunit(cu, appName);
+                var content = RenderCodeunit(filteredCu, appName);
                 File.WriteAllText(filePath, content, new UTF8Encoding(false));
                 generated++;
             }
         }
 
-        return new GenerateResult(generated, skippedExisting, skippedNonCodeunit, skippedNativeMock);
+        return new GenerateResult(generated, skippedExisting, skippedNonCodeunit,
+            skippedNativeMock, skippedNotReferenced, totalAvailable, sourceFileCount);
+    }
+
+    /// <summary>
+    /// Read all .al files from the given source directories and return their contents
+    /// as a single concatenated lowercase string for matching, plus the file count.
+    /// Returns (null, 0) when no source dirs are provided.
+    /// </summary>
+    public static (string? CombinedText, int FileCount) CollectSourceTexts(IReadOnlyList<string>? sourceDirs)
+    {
+        if (sourceDirs == null || sourceDirs.Count == 0)
+            return (null, 0);
+
+        var sb = new StringBuilder();
+        int fileCount = 0;
+
+        foreach (var dir in sourceDirs)
+        {
+            if (!Directory.Exists(dir)) continue;
+            foreach (var alFile in Directory.GetFiles(dir, "*.al", SearchOption.AllDirectories))
+            {
+                sb.AppendLine(File.ReadAllText(alFile));
+                fileCount++;
+            }
+        }
+
+        return (sb.ToString(), fileCount);
+    }
+
+    /// <summary>
+    /// Check if a codeunit is referenced in the source text.
+    /// Matches by name (case-insensitive) or by ID appearing in the source.
+    /// </summary>
+    public static bool IsCodeunitReferenced(CodeunitSymbol cu, string sourceText)
+    {
+        // Check by codeunit ID — the numeric literal appearing anywhere in source
+        if (sourceText.Contains(cu.Id.ToString(), StringComparison.Ordinal))
+            return true;
+
+        // Check by name (case-insensitive)
+        if (sourceText.Contains(cu.Name, StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        return false;
+    }
+
+    /// <summary>
+    /// Return a copy of the codeunit with only procedures that appear to be called
+    /// in the source text. A procedure is considered called if its name followed by
+    /// '(' appears in the source (case-insensitive).
+    /// </summary>
+    public static CodeunitSymbol FilterProcedures(CodeunitSymbol cu, string sourceText)
+    {
+        var filtered = cu.Methods.Where(m =>
+            sourceText.Contains(m.Name + "(", StringComparison.OrdinalIgnoreCase)
+            || sourceText.Contains(m.Name + " (", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        return cu with { Methods = filtered };
     }
 
     // --- Internal types for parsed symbol data ---
