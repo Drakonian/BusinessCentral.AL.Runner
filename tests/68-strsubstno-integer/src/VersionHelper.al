@@ -1,4 +1,4 @@
-codeunit 50100 VersionHelper
+codeunit 56670 VersionHelper
 {
     procedure FormatVersion(Major: Integer; Minor: Integer; Build: Integer; Revision: Integer): Text
     var

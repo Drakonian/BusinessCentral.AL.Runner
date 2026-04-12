@@ -1,4 +1,4 @@
-codeunit 50200 VersionHelperTest
+codeunit 56671 VersionHelperTest
 {
     Subtype = Test;
 
