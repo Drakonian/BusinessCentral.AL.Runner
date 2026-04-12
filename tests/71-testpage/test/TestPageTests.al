@@ -147,4 +147,56 @@ codeunit 56700 "TP TestPage Tests"
     begin
         // Just capture — no assertion needed here
     end;
+
+    [Test]
+    [HandlerFunctions('ConfirmQuestionHandler')]
+    procedure ConfirmHandlerReceivesQuestion()
+    var
+        Logic: Codeunit "TP Confirm Logic";
+    begin
+        // [GIVEN] A ConfirmHandler that validates the question text
+        // [WHEN] Code calls Confirm('Are you sure?')
+        // [THEN] Handler receives the correct question text and replies true
+        Assert.IsTrue(Logic.DoSomethingWithConfirm(), 'Confirm handler should reply true when question matches');
+    end;
+
+    [ConfirmHandler]
+    procedure ConfirmQuestionHandler(Question: Text; var Reply: Boolean)
+    begin
+        // Validate that the question text is passed correctly
+        if Question = 'Are you sure?' then
+            Reply := true
+        else
+            Reply := false;
+    end;
+
+    [Test]
+    procedure TestPageFieldDefaultIsEmpty()
+    var
+        TP: TestPage "TP Test Card";
+    begin
+        // [GIVEN] A TestPage opened without setting any values
+        TP.OpenNew();
+        // [THEN] Field value should be empty by default
+        Assert.AreEqual('', TP.NameField.Value, 'Unset field should return empty text');
+        TP.Close();
+    end;
+
+    [Test]
+    procedure TestPageMultipleFieldSets()
+    var
+        TP: TestPage "TP Test Card";
+    begin
+        // [GIVEN] A TestPage with a field set to one value
+        TP.OpenNew();
+        TP.NameField.SetValue('First');
+        Assert.AreEqual('First', TP.NameField.Value, 'First set should stick');
+        // [WHEN] The same field is set to a different value
+        TP.NameField.SetValue('Second');
+        // [THEN] The new value replaces the old one
+        Assert.AreEqual('Second', TP.NameField.Value, 'Second set should overwrite first');
+        // [NEGATIVE] The old value should NOT be returned
+        Assert.AreNotEqual('First', TP.NameField.Value, 'Old value should not persist');
+        TP.Close();
+    end;
 }
