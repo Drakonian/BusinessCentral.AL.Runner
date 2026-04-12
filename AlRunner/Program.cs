@@ -219,9 +219,14 @@ test executor that needs no BC service tier, Docker, SQL Server, or license.
 - TextBuilder (Append, AppendLine, ToText)
 - RecordRef / FieldRef — Open, Close, Field(n).Value get/set, Insert, Modify,
   Delete, DeleteAll, FindSet+Next iteration, GetTable/SetTable, SetRange/SetFilter,
-  RecRef := OtherRecRef assignment
+  RecRef := OtherRecRef assignment, SetLoadFields (no-op)
 - JSON types: JsonObject, JsonArray, JsonToken, JsonValue — Add, Get, Contains,
   Remove, Replace, Count, WriteTo, ReadFrom, SelectToken, AsValue, AsText, AsInteger, etc.
+- BLOB / InStream / OutStream — CreateInStream/CreateOutStream, HasValue, ReadText/WriteText
+  (in-memory byte buffer; sufficient for text round-trip tests)
+- Library - Variable Storage (codeunit 131004) — Enqueue, DequeueText, DequeueInteger,
+  DequeueDecimal, DequeueBoolean, DequeueDate, DequeueVariant, AssertEmpty, Clear, IsEmpty
+- TestPage navigation — Caption, First(), GoToKey(), Filter.SetFilter() (stubs; return true/no-op)
 - Format() / Evaluate() type conversions
 - Built-in session functions: CompanyName, UserId, TenantId, SerialNumber (return empty string)
 - Partial compilation (skips unsupported object types like XMLport)
@@ -238,7 +243,6 @@ test executor that needs no BC service tier, Docker, SQL Server, or license.
 - HTTP / REST calls — inject via AL interface
 - Event subscribers — OnAfterModify, OnAfterInsert, etc. do not fire
 - StrMenu is not supported
-- BLOB / InStream / OutStream operations
 - Filter groups (FilterGroup)
 
 ### Writing a compatible test codeunit

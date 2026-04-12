@@ -48,7 +48,11 @@ AL Runner is designed to run **before** the full BC service tier pipeline as a f
 - AL interfaces injected by test code
 - AL arrays (MockArray, MockRecordArray)
 - AL Variant (MockVariant)
-- RecordRef / FieldRef (Open, Close, Field(n).Value get/set, Insert, Modify, Delete, DeleteAll, FindSet, Next, GetTable, SetTable, SetRange, SetFilter, RecordId)
+- RecordRef / FieldRef (Open, Close, Field(n).Value get/set, Insert, Modify, Delete, DeleteAll, FindSet, Next, GetTable, SetTable, SetRange, SetFilter, RecordId, SetLoadFields)
+- JSON types (JsonObject, JsonArray, JsonToken, JsonValue): Add, Get, Contains, Remove, Replace, Count, WriteTo, ReadFrom, SelectToken, AsValue, AsText, AsInteger, etc.
+- BLOB / InStream / OutStream — CreateInStream/CreateOutStream, HasValue, ReadText/WriteText (in-memory)
+- Library - Variable Storage (codeunit 131004) — Enqueue, Dequeue*, AssertEmpty, Clear, IsEmpty
+- TestPage navigation — Caption, First(), GoToKey(), Filter.SetFilter()
 - Built-in session functions: CompanyName, UserId, TenantId, SerialNumber (return empty string)
 - Input from .al files, directories, or .app packages
 - Partial compilation (skips unsupported object types like XMLport)
@@ -91,11 +95,10 @@ The codeunit's direct logic is correct. Note: if the test implicitly depends on 
 Known gaps for real-world use:
 
 1. **Implicit event publishers on DB operations** — `OnAfterModify`, `OnAfterInsert`, etc. do NOT fire. Tests that depend on event subscribers will produce silent false positives (see test 05).
-2. **TestPage (partial)** — field access, lifecycle (`OpenEdit`/`Close`), actions (`OK`/`Cancel`), and `[ConfirmHandler]`/`[MessageHandler]` work. `[ModalPageHandler]` (production code opening modal pages) is not yet implemented. Report, XMLPort, and non-test page rendering are not supported.
+2. **TestPage (partial)** — field access, lifecycle (`OpenEdit`/`Close`), actions (`OK`/`Cancel`), navigation (`First()`, `GoToKey()`, `Filter.SetFilter()`), and `[ConfirmHandler]`/`[MessageHandler]`/`[ModalPageHandler]` work. Report, XMLPort, and non-test page rendering are not supported.
 3. **HTTP** — not supported. Inject via AL interface.
 4. **Filter groups** (FilterGroup) — not tracked.
 5. **ALGetFilter** — returns empty string even when filters are active.
-6. **BLOB / InStream / OutStream** — not supported.
 
 ## Developer Contract
 
@@ -236,7 +239,7 @@ All dependencies are auto-downloaded and cached. The only prerequisite is .NET 8
 
 ## Test Cases
 
-The `tests/` directory contains 70 test cases. Each is a self-contained AL project (`src/` + `test/`) that exercises a specific runner capability. Every push runs all test cases against a [matrix of BC versions](https://github.com/StefanMaron/BusinessCentral.AL.Runner/actions/workflows/test-matrix.yml) (26.0 through 27.5).
+The `tests/` directory contains 81 test cases. Each is a self-contained AL project (`src/` + `test/`) that exercises a specific runner capability. Every push runs all test cases against a [matrix of BC versions](https://github.com/StefanMaron/BusinessCentral.AL.Runner/actions/workflows/test-matrix.yml) (26.0 through 27.5).
 
 | Test case | What it covers |
 |---|---|
@@ -310,6 +313,16 @@ The `tests/` directory contains 70 test cases. Each is a self-contained AL proje
 | `68-strsubstno-integer` | StrSubstNo with integer arguments |
 | `69-recref-fieldref` | RecordRef/FieldRef full runtime |
 | `70-companyname` | CompanyName/UserId/TenantId/SerialNumber |
+| `71-testpage` | TestPage field access, lifecycle, built-in actions |
+| `72-recref-assign` | RecordRef := assignment |
+| `73-modal-handler` | ModalPageHandler dispatch |
+| `74-mock-stubs` | TestPage.Caption, RecordRef.Name/SetLoadFields, Page.Update() |
+| `74-testpage-navigation` | TestPage Caption, First(), GoToKey(), Filter.SetFilter() |
+| `75-codeunit-run-bool` | Codeunit.Run() returns bool (TrapError/ThrowError) |
+| `75-library-variable-storage` | Library - Variable Storage Enqueue/Dequeue |
+| `76-navscope-dispatch` | NavScope → object rewrite for record-returning methods |
+| `77-json-types` | JsonObject, JsonArray, JsonToken, JsonValue full API |
+| `78-blob-stream` | BLOB / InStream / OutStream text round-trip |
 
 When a new scenario is encountered that should work but doesn't, it gets triaged:
 - **In scope** → add a test case, fix the runner, verify it passes across all BC versions
