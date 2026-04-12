@@ -91,7 +91,7 @@ The codeunit's direct logic is correct. Note: if the test implicitly depends on 
 Known gaps for real-world use:
 
 1. **Implicit event publishers on DB operations** — `OnAfterModify`, `OnAfterInsert`, etc. do NOT fire. Tests that depend on event subscribers will produce silent false positives (see test 05).
-2. **Page, Report, XMLPort** — not supported. Inject via AL interface, use `--stubs`, or exclude from runner.
+2. **TestPage (partial)** — field access, lifecycle (`OpenEdit`/`Close`), actions (`OK`/`Cancel`), and `[ConfirmHandler]`/`[MessageHandler]` work. `[ModalPageHandler]` (production code opening modal pages) is not yet implemented. Report, XMLPort, and non-test page rendering are not supported.
 3. **HTTP** — not supported. Inject via AL interface.
 4. **Filter groups** (FilterGroup) — not tracked.
 5. **ALGetFilter** — returns empty string even when filters are active.
