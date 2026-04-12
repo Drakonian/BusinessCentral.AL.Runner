@@ -7,6 +7,10 @@ All notable changes to this project are documented here. Format based on
 ## [Unreleased]
 
 ### Fixed
+- **`IsInWriteTransaction()` no longer crashes with NullReferenceException.**
+  `ALDatabase.ALIsInWriteTransaction()` calls into `NavSession` which is null in
+  standalone mode. The rewriter now replaces the call with `false` (no DB
+  transactions in the runner).
 - **`GuiAllowed` now compiles in standalone mode.** Added `ALGuiAllowed` property
   to `MockSystemOperatingSystem` returning `false` (no UI in standalone mode).
   Previously caused `CS0117` compilation error.

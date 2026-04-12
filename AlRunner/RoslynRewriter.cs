@@ -1756,6 +1756,15 @@ protected bool CallGetFormatExtensionMethod(int fieldNo, ref string result) { re
                         SyntaxFactory.IdentifierName("StrSubstNo")));
             }
 
+            // ALDatabase.ALIsInWriteTransaction() -> false
+            // The real ALIsInWriteTransaction calls NavSession.HasWriteTransaction() which crashes
+            // with NullReferenceException when NavSession is null (runner context, no DB).
+            if (exprText == "ALDatabase" && methodName == "ALIsInWriteTransaction")
+            {
+                return SyntaxFactory.LiteralExpression(SyntaxKind.FalseLiteralExpression)
+                    .WithTriviaFrom(visited);
+            }
+
             // ALSystemDate.ALWorkDate(null!) -> ALSystemDate.ALWorkDate(NavDate.Default)
             // The rewriter turns this.Session -> null!, which makes ALWorkDate ambiguous between
             // the NavSession and NavDate overloads. We disambiguate to the NavDate overload.
