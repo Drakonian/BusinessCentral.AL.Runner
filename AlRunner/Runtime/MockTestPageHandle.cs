@@ -82,6 +82,17 @@ public class MockTestPageHandle
     }
 
     /// <summary>
+    /// Returns a MockTestPageAction for a custom page action.
+    /// BC emits <c>tP.Target.GetAction(actionHash).ALInvoke()</c> for
+    /// <c>TestPage.MyAction.Invoke()</c>. Custom actions in standalone mode
+    /// are no-ops — the returned action's ALInvoke() does nothing.
+    /// </summary>
+    public MockTestPageAction GetAction(int actionHash)
+    {
+        return new MockTestPageAction();
+    }
+
+    /// <summary>
     /// Returns a MockTestPageAction for built-in actions (OK, Cancel, Close, etc.).
     /// BC casts FormResult enum values: GetBuiltInAction((FormResult)1) for OK.
     /// The action is linked back to this handle so ALInvoke() can set the ModalResult.

@@ -45,6 +45,19 @@ public class MockFormHandle
     }
     public void SetRecord(object? record) { }
     public object? GetRecord() => null;
+    /// <summary>1-arg GetRecord: BC emits <c>p.Target.GetRecord(rec.Target)</c> to copy the page's
+    /// current record into the caller's variable. No-op in standalone mode.</summary>
+    public void GetRecord(MockRecordHandle rec) { }
+    /// <summary>No-op. BC emits <c>p.Target.SetTableView(rec.Target)</c> to filter the page's view.</summary>
+    public void SetTableView(MockRecordHandle rec) { }
+    /// <summary>Stub property. BC emits <c>p.Target.LookupMode</c> get/set.</summary>
+    public bool LookupMode { get; set; }
+    /// <summary>Stub property. BC emits <c>p.Target.Editable</c> get/set. Default true.</summary>
+    public bool Editable { get; set; } = true;
+    /// <summary>Stub property. BC emits <c>p.Target.PageCaption</c> get/set.</summary>
+    public string PageCaption { get; set; } = "";
+    /// <summary>No-op. BC emits <c>p.Clear()</c> (on handle, not .Target).</summary>
+    public void Clear() { }
     public void Update(bool saveRecord = true) { }
     public void Close() { }
     public void Activate() { }

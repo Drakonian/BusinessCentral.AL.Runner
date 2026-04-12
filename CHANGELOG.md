@@ -6,6 +6,20 @@ All notable changes to this project are documented here. Format based on
 
 ## [Unreleased]
 
+### Added
+- **`MockFormHandle` page variable stubs.** `SetTableView(rec)`, `LookupMode`
+  (bool property, default false), `Editable` (bool property, default true),
+  `PageCaption` (string property, default empty), `Clear()`, and
+  `GetRecord(rec)` (1-arg overload) are now available on Page variables.
+  Previously caused CS1061 compilation errors when production code used these
+  common page-level members. Tested by `tests/79-form-handle-stubs/` (8 test cases).
+  ([#51](https://github.com/StefanMaron/BusinessCentral.AL.Runner/issues/51))
+- **`TestPage` custom action invoke (`GetAction`).** `MockTestPageHandle.GetAction(actionHash)`
+  returns a no-op `MockTestPageAction` so `TestPage.MyAction.Invoke()` compiles and
+  runs without crashing. Previously caused CS1061 because only `GetBuiltInAction`
+  (for OK/Cancel) existed. Tested by `tests/79-form-handle-stubs/`.
+  ([#52](https://github.com/StefanMaron/BusinessCentral.AL.Runner/issues/52))
+
 ## [1.0.8] — 2026-04-12
 
 ### Added
