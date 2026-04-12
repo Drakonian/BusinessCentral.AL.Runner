@@ -26,6 +26,16 @@ public class MockBlob : NavValue
     }
 
     /// <summary>
+    /// ALCreateInStream — 3-arg void overload: (ITreeObject parent, MockInStream inStream, TextEncoding encoding)
+    /// BC emits: blob.ALCreateInStream(null!, iStr, TextEncoding::UTF8)
+    /// The encoding argument is ignored; all mock I/O uses UTF-8 strings.
+    /// </summary>
+    public void ALCreateInStream(object? parent, MockInStream inStream, object? encoding)
+    {
+        inStream.Init(_data);
+    }
+
+    /// <summary>
     /// ALCreateInStream — 1-arg overload returning a new MockInStream.
     /// BC emits: var iStr = blob.ALCreateInStream(null!)
     /// </summary>
@@ -42,6 +52,17 @@ public class MockBlob : NavValue
     /// Initializes the given stream; data written to it is flushed back to this BLOB.
     /// </summary>
     public void ALCreateOutStream(object? parent, MockOutStream outStream)
+    {
+        outStream.Init();
+        outStream.OnFlush = d => _data = d;
+    }
+
+    /// <summary>
+    /// ALCreateOutStream — 3-arg void overload: (ITreeObject parent, MockOutStream outStream, TextEncoding encoding)
+    /// BC emits: blob.ALCreateOutStream(null!, oStr, TextEncoding::UTF8)
+    /// The encoding argument is ignored; all mock I/O uses UTF-8 strings.
+    /// </summary>
+    public void ALCreateOutStream(object? parent, MockOutStream outStream, object? encoding)
     {
         outStream.Init();
         outStream.OnFlush = d => _data = d;

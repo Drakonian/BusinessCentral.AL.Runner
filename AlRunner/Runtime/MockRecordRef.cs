@@ -124,6 +124,25 @@ public class MockRecordRef
     public bool Next() => _handle != null && _handle.ALNext() != 0;
     public int ALNext() => _handle?.ALNext() ?? 0;
 
+    /// <summary>ALNext(steps) — advance N records forward (RecRef.Next(N) in AL).</summary>
+    public int ALNext(int steps)
+    {
+        if (_handle == null) return 0;
+        int moved = 0;
+        for (int i = 0; i < steps; i++)
+        {
+            if (_handle.ALNext() == 0) break;
+            moved++;
+        }
+        return moved;
+    }
+
+    /// <summary>ALGetView — returns a filter-view string (stub: returns empty string).</summary>
+    public string ALGetView() => string.Empty;
+
+    /// <summary>ALSetView — applies a filter-view string (stub: no-op; view strings require full BC parser).</summary>
+    public void ALSetView(string view) { /* no-op in mock */ }
+
     // -- Insert / Modify / Delete --
 
     public bool Insert() => Insert(false);

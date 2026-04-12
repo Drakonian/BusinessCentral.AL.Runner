@@ -2,6 +2,7 @@ namespace AlRunner.Runtime;
 
 using Microsoft.Dynamics.Nav.Runtime;
 using Microsoft.Dynamics.Nav.Types;
+using Microsoft.Dynamics.Nav.Types.Metadata;
 
 /// <summary>
 /// Mock for NavFieldRef — wraps a field slot on a MockRecordHandle (accessed
@@ -58,8 +59,8 @@ public class MockFieldRef
     /// <summary>ALType — property returning field type (stub: NavType.Text).</summary>
     public NavType ALType => NavType.Text;
 
-    /// <summary>ALClass — field class (Normal/FlowField/FlowFilter). Stub: always 0 (Normal).</summary>
-    public int ALClass => 0;
+    /// <summary>ALClass — field class (Normal/FlowField/FlowFilter). Stub: always Normal.</summary>
+    public FieldClass ALClass => FieldClass.Normal;
 
     /// <summary>ALRelation — table relation target table ID. Stub: 0.</summary>
     public int ALRelation => 0;

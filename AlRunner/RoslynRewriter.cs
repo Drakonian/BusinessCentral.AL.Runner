@@ -820,6 +820,15 @@ protected bool CallGetFormatExtensionMethod(int fieldNo, ref string result) { re
         if (text == "ALStream")
             return node.WithIdentifier(SyntaxFactory.Identifier("MockStream"));
 
+        // NavComplexValue -> object
+        // The BC compiler uses NavComplexValue as a base type for complex
+        // value parameters (RecordRef, Variant, etc.). MockVariant and
+        // MockRecordRef don't extend the BC-internal NavComplexValue class,
+        // so we replace it with object to allow any mock type to be passed.
+        if (text == "NavComplexValue")
+            return SyntaxFactory.PredefinedType(SyntaxFactory.Token(SyntaxKind.ObjectKeyword))
+                .WithTriviaFrom(node);
+
         // NavScope -> object
         // The BC compiler adds a hidden NavScope γReturnValueParent parameter
         // to methods that return a Record or Interface. The parameter is used

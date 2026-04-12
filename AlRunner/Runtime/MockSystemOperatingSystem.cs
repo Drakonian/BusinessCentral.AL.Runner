@@ -22,4 +22,10 @@ public static class MockSystemOperatingSystem
     {
         // No-op.
     }
+
+    /// <summary>
+    /// ALGuiAllowed — AL: GuiAllowed() — returns whether a GUI client is available.
+    /// In standalone mode there is no client surface, so this always returns false.
+    /// </summary>
+    public static bool ALGuiAllowed => false;
 }

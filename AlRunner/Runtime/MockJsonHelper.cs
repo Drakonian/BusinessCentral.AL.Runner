@@ -34,6 +34,33 @@ public static class MockJsonHelper
         => SetBackingTokenMethod.Invoke(token, new object[] { value, verifyType });
 
     /// <summary>
+    /// Replacement for NavJsonToken.ALWriteTo(DataError, OutStream).
+    /// Serializes the JSON token to a MockOutStream.
+    /// AL: JsonObject.WriteTo(OutStream)  →  MockJsonHelper.WriteTo(token, error, stream)
+    /// </summary>
+    public static bool WriteTo(NavJsonToken token, DataError errorLevel, MockOutStream stream)
+    {
+        try
+        {
+            var backingToken = GetBackingToken(token);
+            using var stringWriter = new StringWriter(CultureInfo.InvariantCulture);
+            using var jsonWriter = new JsonTextWriter(stringWriter)
+            {
+                Formatting = Formatting.None
+            };
+            backingToken.WriteTo(jsonWriter);
+            stream.WriteText(stringWriter.ToString());
+            return true;
+        }
+        catch (Exception)
+        {
+            if (errorLevel == DataError.ThrowError)
+                throw;
+            return false;
+        }
+    }
+
+    /// <summary>
     /// Replacement for NavJsonToken.ALWriteTo(DataError, ByRef&lt;NavText&gt;).
     /// Serializes the JSON token to a Text variable without going through
     /// TrappableOperationExecutor or NavCurrentThread.Session.
@@ -84,6 +111,17 @@ public static class MockJsonHelper
                 throw;
             return false;
         }
+    }
+
+    /// <summary>
+    /// Replacement for NavJsonToken.ALReadFrom(DataError, InStream).
+    /// Reads the JSON string from a MockInStream and parses it.
+    /// AL: JsonObject.ReadFrom(InStream)  →  MockJsonHelper.ReadFrom(token, error, stream)
+    /// </summary>
+    public static bool ReadFrom(NavJsonToken token, DataError errorLevel, MockInStream stream)
+    {
+        var text = stream.ReadAll();
+        return ReadFrom(token, errorLevel, text);
     }
 
     /// <summary>

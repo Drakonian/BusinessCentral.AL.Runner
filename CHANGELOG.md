@@ -7,6 +7,22 @@ All notable changes to this project are documented here. Format based on
 ## [Unreleased]
 
 ### Fixed
+- **`GuiAllowed` now compiles in standalone mode.** Added `ALGuiAllowed` property
+  to `MockSystemOperatingSystem` returning `false` (no UI in standalone mode).
+  Previously caused `CS0117` compilation error.
+  ([#54](https://github.com/StefanMaron/BusinessCentral.AL.Runner/issues/54))
+- **`FieldRef.Class = FieldClass::Normal` comparison now compiles.** Changed
+  `MockFieldRef.ALClass` return type from `int` to `FieldClass` enum, fixing
+  `CS0019` operator mismatch error.
+  ([#54](https://github.com/StefanMaron/BusinessCentral.AL.Runner/issues/54))
+- **`NavComplexValue` type parameter mismatch resolved.** Added rewriter rule
+  replacing `NavComplexValue` with `object` so `MockVariant` and `MockRecordRef`
+  can be passed where BC expects `NavComplexValue`.
+  ([#54](https://github.com/StefanMaron/BusinessCentral.AL.Runner/issues/54))
+
+  Tested by `tests/79-gui-fieldclass/` (6 test cases).
+
+### Fixed
 - **`exit(this)` in fluent-chaining codeunits now works.** The BC compiler emits
   `__ThisHandle` for codeunit methods that return `Codeunit "Self"` (fluent builder
   pattern). After the rewriter stripped the `NavCodeunit` base class, `__ThisHandle`

@@ -46,6 +46,19 @@ public class MockInStream
         _pos = other._pos;
     }
 
+    /// <summary>ALIsEOS — BC's InStream.EOS() mapped to this property.</summary>
+    public bool ALIsEOS => EOS;
+
+    /// <summary>Read all remaining bytes as a UTF-8 string (used by MockJsonHelper.ReadFrom).</summary>
+    public string ReadAll()
+    {
+        int available = _data.Length - _pos;
+        if (available <= 0) return string.Empty;
+        var text = Encoding.UTF8.GetString(_data, _pos, available);
+        _pos = _data.Length;
+        return text;
+    }
+
     /// <summary>Read raw bytes into a buffer.</summary>
     public int Read(byte[] buffer, int offset, int count)
     {
