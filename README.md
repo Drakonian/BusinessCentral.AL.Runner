@@ -63,7 +63,8 @@ AL Runner is designed to run **before** the full BC service tier pipeline as a f
 - Machine-readable JSON output (`--output-json`)
 
 **Not supported (by design):**
-- Page, Report, XMLPort — inject via AL interface or exclude from runner
+- Page, Report — inject via AL interface or exclude from runner
+- XmlPort — variables compile and surrounding logic runs; `Import()`/`Export()` throw at runtime (XmlPort I/O requires the BC service tier)
 - HTTP requests — inject via AL interface or exclude from runner
 - Event subscribers — implicit events (OnAfterModify, OnAfterInsert, etc.) do NOT fire
 - .app file loading as test input (source directories only; .app supported for symbol references)
@@ -95,10 +96,11 @@ The codeunit's direct logic is correct. Note: if the test implicitly depends on 
 Known gaps for real-world use:
 
 1. **Implicit event publishers on DB operations** — `OnAfterModify`, `OnAfterInsert`, etc. do NOT fire. Tests that depend on event subscribers will produce silent false positives (see test 05).
-2. **TestPage (partial)** — field access, lifecycle (`OpenEdit`/`Close`), actions (`OK`/`Cancel`), navigation (`First()`, `GoToKey()`, `Filter.SetFilter()`), and `[ConfirmHandler]`/`[MessageHandler]`/`[ModalPageHandler]` work. Report, XMLPort, and non-test page rendering are not supported.
-3. **HTTP** — not supported. Inject via AL interface.
-4. **Filter groups** (FilterGroup) — not tracked.
-5. **ALGetFilter** — returns empty string even when filters are active.
+2. **TestPage (partial)** — field access, lifecycle (`OpenEdit`/`Close`), actions (`OK`/`Cancel`), navigation (`First()`, `GoToKey()`, `Filter.SetFilter()`), and `[ConfirmHandler]`/`[MessageHandler]`/`[ModalPageHandler]` work. Report and non-test page rendering are not supported.
+3. **XmlPort (partial)** — `XmlPort "X"` variables compile via `MockXmlPortHandle`. Accessing `XmlPortId` and `GetStatus()` style logic works. `Import()`/`Export()` (both instance and static `XmlPort.Import(portId, stream)`) throw `NotSupportedException` at runtime — XmlPort I/O requires the BC service tier. Inject via AL interface to make it testable.
+4. **HTTP** — not supported. Inject via AL interface.
+5. **Filter groups** (FilterGroup) — not tracked.
+6. **ALGetFilter** — returns empty string even when filters are active.
 
 ## Developer Contract
 
