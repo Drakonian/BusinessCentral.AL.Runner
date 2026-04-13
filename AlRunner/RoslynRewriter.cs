@@ -207,6 +207,26 @@ public class RoslynRewriter : CSharpSyntaxRewriter
     // -----------------------------------------------------------------------
     public override SyntaxNode? VisitClassDeclaration(ClassDeclarationSyntax node)
     {
+        // XmlPort object classes (XmlPortNNNN : NavXmlPort) have complex schema
+        // initialization code that cannot compile in standalone mode. Replace the
+        // entire class with a minimal stub that extends MockXmlPortHandle.
+        if (node.BaseList != null && node.BaseList.Types.Any(
+                t => t.Type.ToString() == "NavXmlPort"))
+        {
+            var stubClass = node
+                .WithBaseList(SyntaxFactory.BaseList(
+                    SyntaxFactory.SingletonSeparatedList<BaseTypeSyntax>(
+                        SyntaxFactory.SimpleBaseType(
+                            SyntaxFactory.ParseTypeName("AlRunner.Runtime.MockXmlPortHandle")))))
+                .WithMembers(SyntaxFactory.List<MemberDeclarationSyntax>(new[]
+                {
+                    SyntaxFactory.ParseMemberDeclaration(
+                        $"public {node.Identifier.Text}() {{ }}")!
+                }))
+                .WithAttributeLists(SyntaxFactory.List<AttributeListSyntax>());
+            return stubClass;
+        }
+
         // Detect if this is a scope class BEFORE visiting children.
         // We need to know the enclosing class name for _parent field type.
         bool isScopeClass = false;
