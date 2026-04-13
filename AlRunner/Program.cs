@@ -1978,7 +1978,7 @@ public static class Executor
 
                 // Capture variable values from scope fields if enabled
                 if (captureValues)
-                    CaptureFieldValues(scope, scopeType, testName);
+                    CaptureFieldValues(scope, scopeType, testName, AlRunner.SourceFileMapper.GetObjectForClass(parentType.Name));
 
                 results.Add(new AlRunner.TestResult
                 {
@@ -2122,7 +2122,7 @@ public static class Executor
         return 0;
     }
 
-    private static void CaptureFieldValues(object scope, Type scopeType, string testName)
+    private static void CaptureFieldValues(object scope, Type scopeType, string testName, string objectName)
     {
         foreach (var field in scopeType.GetFields(BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance))
         {
@@ -2141,7 +2141,7 @@ public static class Executor
             try
             {
                 var value = field.GetValue(scope);
-                AlRunner.Runtime.ValueCapture.Capture(testName, field.Name, value, 0);
+                AlRunner.Runtime.ValueCapture.Capture(testName, objectName, field.Name, value, 0);
             }
             catch { /* skip fields that can't be read */ }
         }
@@ -2274,7 +2274,7 @@ public static class Executor
         {
             onRunMethod.Invoke(scope, null);
             if (captureValues)
-                CaptureFieldValues(scope, scopeType, "OnRun");
+                CaptureFieldValues(scope, scopeType, "OnRun", AlRunner.SourceFileMapper.GetObjectForClass(parentType.Name));
             return 0;
         }
         catch (TargetInvocationException ex)
