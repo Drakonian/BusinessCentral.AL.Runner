@@ -52,7 +52,9 @@ AL Runner is designed to run **before** the full BC service tier pipeline as a f
 - JSON types (JsonObject, JsonArray, JsonToken, JsonValue): Add, Get, Contains, Remove, Replace, Count, WriteTo, ReadFrom, SelectToken, AsValue, AsText, AsInteger, etc.
 - BLOB / InStream / OutStream — CreateInStream/CreateOutStream, HasValue, ReadText/WriteText (in-memory)
 - Library - Variable Storage (codeunit 131004) — Enqueue, Dequeue*, AssertEmpty, Clear, IsEmpty
-- TestPage navigation — Caption, First(), GoToKey(), Filter.SetFilter()
+- TestPage navigation — Caption, First(), GoToKey(), GoToRecord(), Next(), New(), GetPart(), Filter.SetFilter()/GetFilter()
+- Request page handler dispatch (`[RequestPageHandler]`)
+- Limited report-handle support — `SetTableView()`, helper-procedure dispatch, `Run()`, `RunRequestPage()`
 - Built-in session functions: CompanyName, UserId, TenantId, SerialNumber (return empty string)
 - Input from .al files, directories, or .app packages
 - Partial compilation (skips unsupported object types like XMLport)
@@ -63,7 +65,7 @@ AL Runner is designed to run **before** the full BC service tier pipeline as a f
 - Machine-readable JSON output (`--output-json`)
 
 **Not supported (by design):**
-- Page, Report — inject via AL interface or exclude from runner
+- Page and report rendering fidelity — inject via AL interface or exclude from runner when correctness depends on real BC UI/runtime behavior
 - XmlPort — variables compile and surrounding logic runs; `Import()`/`Export()` throw at runtime (XmlPort I/O requires the BC service tier)
 - HTTP requests — inject via AL interface or exclude from runner
 - Event subscribers — implicit events (OnAfterModify, OnAfterInsert, etc.) do NOT fire
@@ -96,7 +98,7 @@ The codeunit's direct logic is correct. Note: if the test implicitly depends on 
 Known gaps for real-world use:
 
 1. **Implicit event publishers on DB operations** — `OnAfterModify`, `OnAfterInsert`, etc. do NOT fire. Tests that depend on event subscribers will produce silent false positives (see test 05).
-2. **TestPage (partial)** — field access, lifecycle (`OpenEdit`/`Close`), actions (`OK`/`Cancel`), navigation (`First()`, `GoToKey()`, `Filter.SetFilter()`), and `[ConfirmHandler]`/`[MessageHandler]`/`[ModalPageHandler]` work. Report and non-test page rendering are not supported.
+2. **TestPage / request page / report (partial)** — field access, lifecycle (`OpenEdit`/`Close`/`New`), actions (`OK`/`Cancel`), navigation (`First()`, `GoToKey()`, `GoToRecord()`, `Next()`, `GetPart()`, `Filter.SetFilter()/GetFilter()`), and `[ConfirmHandler]`/`[MessageHandler]`/`[ModalPageHandler]`/`[RequestPageHandler]` work. Report variables support limited standalone operations such as `SetTableView()`, helper dispatch, `Run()`, and `RunRequestPage()`. Real page/report rendering and full UI metadata evaluation are still not supported.
 3. **XmlPort (partial)** — `XmlPort "X"` variables compile via `MockXmlPortHandle`. Accessing `XmlPortId` and `GetStatus()` style logic works. `Import()`/`Export()` (both instance and static `XmlPort.Import(portId, stream)`) throw `NotSupportedException` at runtime — XmlPort I/O requires the BC service tier. Inject via AL interface to make it testable.
 4. **HTTP** — not supported. Inject via AL interface.
 5. **Filter groups** (FilterGroup) — not tracked.

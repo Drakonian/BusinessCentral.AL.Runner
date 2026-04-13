@@ -23,6 +23,12 @@ public class MockInStream
     /// </summary>
     public static MockInStream Default(object? parent = null) => new MockInStream();
 
+    public void Clear()
+    {
+        _data = Array.Empty<byte>();
+        _pos = 0;
+    }
+
     /// <summary>Read remaining bytes as UTF-8 text into a ref string.</summary>
     public int ReadText(ref string text, int maxLength = int.MaxValue)
     {

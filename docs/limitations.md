@@ -72,12 +72,20 @@ event subscriber side-effects.
 ### No UI rendering
 
 Pages are not rendered. There is no layout engine, no field visibility evaluation, and
-no report dataset. `TestPage` provides field get/set and handler dispatch, but:
+no report dataset. `TestPage` provides expanded field access, navigation, and handler
+dispatch, and report/request-page variables support a limited standalone surface, but:
 
-- Field `Visible`, `Enabled`, and `Editable` are not evaluated against page metadata.
+- Field `Visible`, `Enabled`, and `Editable` are not evaluated against real page metadata.
+- `TestPage` methods like `GoToRecord`, `Next`, `New`, `GetPart`, and filter reads are
+  mock-backed rather than UI-backed.
 - Actions beyond OK/Cancel/Close are not bound to real page action triggers.
 - `Page.Run()` is a no-op. `Page.RunModal()` dispatches to `[ModalPageHandler]` if
   registered, otherwise throws.
+- Request pages can be handled via `[RequestPageHandler]`, but this is handler dispatch
+  only, not real request-page rendering.
+- Report variables can call limited standalone helpers such as `SetTableView()`,
+  helper procedures, `Run()`, and `RunRequestPage()`, but report layout/rendering
+  behavior is still not available.
 
 ### No HTTP
 

@@ -12,6 +12,9 @@ using Microsoft.Dynamics.Nav.Types;     // NavType, DataError
 /// </summary>
 public class MockRecordHandle
 {
+    private const int SystemIdFieldNo = 2000000000;
+    private const int SystemModifiedAtFieldNo = 2000000003;
+
     private readonly int _tableId;
     /// <summary>The table ID this handle is bound to.</summary>
     public int TableId => _tableId;
@@ -30,6 +33,7 @@ public class MockRecordHandle
     // Current sort key fields (for ordering)
     private int[]? _currentKeyFields;
     private readonly Dictionary<int, bool> _ascending = new();
+    private string _viewText = string.Empty;
 
     // Primary key field numbers per table (registered via RegisterPrimaryKey)
     private static readonly Dictionary<int, int[]> _primaryKeys = new();
@@ -103,6 +107,15 @@ public class MockRecordHandle
     /// </summary>
     public NavValue GetGlobalVariable(int id, NavType type) => DefaultForType(type);
     public void SetGlobalVariable(int id, NavType type, object value) { }
+    public object GetGlobalArrayVariable(int id, NavType type) => type switch
+    {
+        NavType.Code => new MockArray<NavCode>(new NavCode(20, ""), 8),
+        NavType.Text => new MockArray<NavText>(NavText.Default(0), 8),
+        NavType.Integer => new MockArray<NavInteger>(NavInteger.Default, 8),
+        NavType.Decimal => new MockArray<NavDecimal>(NavDecimal.Default, 8),
+        NavType.Boolean => new MockArray<NavBoolean>(NavBoolean.Default, 8),
+        _ => Array.Empty<object>(),
+    };
 
     public void SetFieldValueSafe(int fieldNo, NavType expectedType, NavValue value)
     {
@@ -217,6 +230,7 @@ public class MockRecordHandle
         _fields = new Dictionary<int, NavValue>();
         _cursorPosition = -1;
         _currentResultSet = null;
+        _viewText = string.Empty;
     }
 
     /// <summary>
@@ -409,6 +423,29 @@ public class MockRecordHandle
         }
         return false;
     }
+
+    public bool ALGetBySystemId(DataError errorLevel, Guid systemId)
+    {
+        if (!_tables.TryGetValue(_tableId, out var table))
+            return false;
+
+        foreach (var row in table)
+        {
+            if (row.TryGetValue(SystemIdFieldNo, out var value) &&
+                value is NavGuid navGuid &&
+                navGuid.ToGuid() == systemId)
+            {
+                _fields = new Dictionary<int, NavValue>(row);
+                return true;
+            }
+        }
+
+        if (errorLevel == DataError.ThrowError)
+            throw new Exception($"Record not found in table {_tableId} for SystemId '{systemId}'");
+        return false;
+    }
+
+    public bool ALGetBySystemId(Guid systemId) => ALGetBySystemId(DataError.ThrowError, systemId);
 
     /// <summary>
     /// Compare two stringified primary-key values with cross-type tolerance.
@@ -685,6 +722,7 @@ public class MockRecordHandle
         _filters.Clear();
         _currentKeyFields = null;
         _ascending.Clear();
+        _viewText = string.Empty;
     }
 
     // -----------------------------------------------------------------------
@@ -720,6 +758,8 @@ public class MockRecordHandle
     {
         return fieldNo;
     }
+
+    public bool ALReadPermission => true;
 
     // -----------------------------------------------------------------------
     // Validate — sets field value (triggers are not implemented)
@@ -999,6 +1039,13 @@ public class MockRecordHandle
         // No-op: all fields always loaded in in-memory store
     }
 
+    public string ALGetView() => _viewText;
+
+    public void ALSetView(string view)
+    {
+        _viewText = view ?? string.Empty;
+    }
+
     // -----------------------------------------------------------------------
     // FieldCaption — returns field name (stubbed)
     // -----------------------------------------------------------------------
@@ -1116,6 +1163,16 @@ public class MockRecordHandle
                 IsRangeFilter = true,
             };
         }
+    }
+
+    public void ClearFieldValue(int fieldNo)
+    {
+        _fields.Remove(fieldNo);
+    }
+
+    public void ClearFieldValue(int extensionId, int fieldNo)
+    {
+        ClearFieldValue(fieldNo);
     }
 
     /// <summary>

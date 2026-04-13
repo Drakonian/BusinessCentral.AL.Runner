@@ -266,7 +266,7 @@ public class AlRunnerPipeline
         // Handle inline code
         if (options.InlineCode != null)
         {
-            var code = options.InlineCode;
+            var code = PrepareSourceForStandalone(options.InlineCode);
             if (!code.TrimStart().StartsWith("codeunit", StringComparison.OrdinalIgnoreCase) &&
                 !code.TrimStart().StartsWith("table", StringComparison.OrdinalIgnoreCase))
             {
@@ -323,12 +323,13 @@ public class AlRunnerPipeline
                 var groupSources = new List<string>();
                 foreach (var (name, source) in extracted)
                 {
+                    var preparedSource = PrepareSourceForStandalone(source);
                     Log.Info($"  {name}");
-                    alSources.Add(source);
-                    groupSources.Add(source);
+                    alSources.Add(preparedSource);
+                    groupSources.Add(preparedSource);
 
                     // Register extracted objects with SourceFileMapper using the .app-relative name
-                    foreach (var objName in SourceFileMapper.ParseObjectDeclarations(source))
+                    foreach (var objName in SourceFileMapper.ParseObjectDeclarations(preparedSource))
                         SourceFileMapper.Register(objName, name);
                 }
                 var fullPath = Path.GetFullPath(path);
@@ -349,7 +350,7 @@ public class AlRunnerPipeline
                 foreach (var f in alFiles)
                 {
                     Log.Info($"  {Path.GetFileName(f)}");
-                    var src = File.ReadAllText(f);
+                    var src = PrepareSourceForStandalone(File.ReadAllText(f));
                     alSources.Add(src);
                     groupSources.Add(src);
 
@@ -363,7 +364,7 @@ public class AlRunnerPipeline
             }
             else if (File.Exists(path))
             {
-                var src = File.ReadAllText(path);
+                var src = PrepareSourceForStandalone(File.ReadAllText(path));
                 alSources.Add(src);
                 var fullPath = Path.GetFullPath(Path.GetDirectoryName(path)!);
                 inputPaths.Add(fullPath);
@@ -445,7 +446,10 @@ public class AlRunnerPipeline
         // Assert stubs compiled separately when Assert.app found in packages
         if (assertStubSources.Count > 0)
         {
-            var stubCSharp = AlTranspiler.TranspileMulti(assertStubSources, options.PackagePaths, inputPaths);
+            // Compile runtime-only built-in stubs in isolation so they don't
+            // collide with the real BC test library symbols already referenced
+            // by the main compilation.
+            var stubCSharp = AlTranspiler.TranspileMulti(assertStubSources);
             if (stubCSharp != null)
             {
                 generatedCSharpList.AddRange(stubCSharp);
@@ -736,6 +740,12 @@ public class AlRunnerPipeline
         List<string> alSources,
         List<string> assertStubSources)
     {
+        if (!NeedsBuiltInTestStubs(alSources))
+        {
+            Log.Info("Skipping built-in test stubs (no test-library usage detected)");
+            return;
+        }
+
         bool packagesHaveAssert = packagePaths.Any(p =>
             Directory.Exists(p) &&
             Directory.GetFiles(p, "*.app", SearchOption.AllDirectories)
@@ -794,6 +804,72 @@ public class AlRunnerPipeline
             }
             Log.Info("Skipping Assert stubs for AL compilation (real Assert.app found in packages)");
         }
+    }
+
+    private static bool NeedsBuiltInTestStubs(List<string> alSources)
+    {
+        foreach (var src in alSources)
+        {
+            if (src.Contains("Subtype = Test", StringComparison.OrdinalIgnoreCase) ||
+                src.Contains("Subtype = TestRunner", StringComparison.OrdinalIgnoreCase) ||
+                src.Contains("\"Library - Variable Storage\"", StringComparison.OrdinalIgnoreCase) ||
+                src.Contains("\"Library Assert\"", StringComparison.OrdinalIgnoreCase) ||
+                src.Contains("Codeunit Assert", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static string PrepareSourceForStandalone(string source)
+    {
+        if (!Regex.IsMatch(source, @"^\s*report(extension)?\b", RegexOptions.IgnoreCase))
+            return source;
+
+        return StripNamedBlock(source, "rendering");
+    }
+
+    private static string StripNamedBlock(string source, string blockName)
+    {
+        int searchIndex = 0;
+        while (searchIndex < source.Length)
+        {
+            var match = Regex.Match(
+                source.Substring(searchIndex),
+                $@"(?im)^\s*{Regex.Escape(blockName)}\s*\{{");
+            if (!match.Success)
+                break;
+
+            int blockStart = searchIndex + match.Index;
+            int openBrace = source.IndexOf('{', blockStart);
+            if (openBrace < 0)
+                break;
+
+            int depth = 0;
+            int i = openBrace;
+            for (; i < source.Length; i++)
+            {
+                if (source[i] == '{')
+                    depth++;
+                else if (source[i] == '}')
+                {
+                    depth--;
+                    if (depth == 0)
+                        break;
+                }
+            }
+
+            if (i >= source.Length)
+                break;
+
+            var replacement = $"{blockName}{Environment.NewLine}{{{Environment.NewLine}}}";
+            source = source.Substring(0, blockStart) + replacement + source.Substring(i + 1);
+            searchIndex = blockStart + replacement.Length;
+        }
+
+        return source;
     }
 
     private static List<(string Name, string Code)>? Transpile(

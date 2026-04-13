@@ -28,6 +28,16 @@ public class MockTextBuilder
         _sb.AppendLine((string)text);
     }
 
+    public void ALAppendLine(DataError errorLevel)
+    {
+        _sb.AppendLine();
+    }
+
+    public void ALAppendLine()
+    {
+        _sb.AppendLine();
+    }
+
     /// <summary>
     /// Returns the accumulated text as a NavText value.
     /// </summary>

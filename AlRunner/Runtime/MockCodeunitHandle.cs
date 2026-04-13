@@ -602,6 +602,8 @@ public class MockCodeunitHandle
         return score;
     }
 
+    internal static object? ConvertArgForTests(object? arg, Type targetType) => ConvertArg(arg, targetType);
+
     private static object? ConvertArg(object? arg, Type targetType)
     {
         if (arg == null) return null;

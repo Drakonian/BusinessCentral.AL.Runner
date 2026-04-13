@@ -21,6 +21,7 @@ public class MockTestPageHandle
     public int PageId { get; }
 
     private readonly Dictionary<int, MockTestPageField> _fields = new();
+    private readonly Dictionary<int, MockTestPageHandle> _parts = new();
 
     /// <summary>
     /// The modal result set by invoking a built-in action (OK, Cancel, etc.).
@@ -42,6 +43,8 @@ public class MockTestPageHandle
     public void ALOpenNew() { }
     public void ALClose() { }
     public void ALTrap() { }
+    public void ALNew() { }
+    public void ClearReference() { }
 
     /// <summary>
     /// Returns the page caption. Stub returns "TestPage" since the runner
@@ -53,6 +56,19 @@ public class MockTestPageHandle
     /// Navigates to the first record on the page. Stub returns true.
     /// </summary>
     public bool ALFirst() => true;
+
+    /// <summary>
+    /// Navigates to a specific record on the page. Standalone mode does not bind
+    /// page buffers, so this succeeds without changing state.
+    /// </summary>
+    public bool ALGoToRecord(MockRecordHandle rec) => true;
+    public bool ALGoToRecord(DataError errorLevel, MockRecordHandle rec) => ALGoToRecord(rec);
+
+    /// <summary>
+    /// Moves to the next row. TestPage.Next() is boolean in generated code.
+    /// </summary>
+    public bool ALNext() => false;
+    public bool ALNext(int steps) => false;
 
     /// <summary>
     /// Navigates to the record matching the given key values. Stub returns true.
@@ -79,6 +95,19 @@ public class MockTestPageHandle
             _fields[fieldHash] = field;
         }
         return field;
+    }
+
+    /// <summary>
+    /// Returns a nested part handle for subpages such as lines on a card page.
+    /// </summary>
+    public MockTestPageHandle GetPart(int partHash)
+    {
+        if (!_parts.TryGetValue(partHash, out var part))
+        {
+            part = new MockTestPageHandle(PageId);
+            _parts[partHash] = part;
+        }
+        return part;
     }
 
     /// <summary>
@@ -114,7 +143,7 @@ public class MockTestPageHandle
 public class MockTestPageField
 {
     private readonly int _fieldHash;
-    private NavValue _value;
+    private object? _value;
 
     public MockTestPageField(int fieldHash)
     {
@@ -130,11 +159,20 @@ public class MockTestPageField
         _value = value;
     }
 
+    public void ALSetValue(object? session, object? value)
+    {
+        _value = value;
+    }
+
     /// <summary>
     /// Get the current field value as a NavValue.
     /// BC reads this to pass to Assert.AreEqual via ALCompiler.ToVariant.
     /// </summary>
-    public NavValue ALValue => _value;
+    public object? ALValue
+    {
+        get => _value;
+        set => _value = value;
+    }
 
     /// <summary>
     /// ALCaption — returns the field caption. Stub: empty string.
@@ -153,6 +191,16 @@ public class MockTestPageField
     /// BC emits <c>tP.GetField(hash).ALEditable()</c> as a method call for reads.
     /// </summary>
     public bool ALEditable() => true;
+
+    /// <summary>
+    /// ALEnabled — whether the field is enabled on the page. Stub: always true.
+    /// </summary>
+    public bool ALEnabled() => true;
+
+    /// <summary>
+    /// Convert the current field value to decimal for test assertions.
+    /// </summary>
+    public decimal ALAsDecimal() => AlCompat.ObjectToDecimal(_value);
 
     /// <summary>
     /// ALLookup — triggers the lookup action on the field. No-op in standalone mode.
@@ -214,9 +262,22 @@ public class MockTestPageAction
 /// </summary>
 public class MockTestPageFilter
 {
+    private readonly Dictionary<int, string> _filters = new();
+
     /// <summary>
     /// Sets a filter on the given field. No-op in standalone mode.
     /// BC emits: ALSetFilter(fieldNo, filterExpression)
     /// </summary>
-    public void ALSetFilter(int fieldNo, string filterExpression) { }
+    public void ALSetFilter(int fieldNo, string filterExpression)
+    {
+        _filters[fieldNo] = filterExpression ?? "";
+    }
+
+    /// <summary>
+    /// Returns the last filter set for a field.
+    /// </summary>
+    public string ALGetFilter(int fieldNo)
+    {
+        return _filters.TryGetValue(fieldNo, out var filter) ? filter : "";
+    }
 }

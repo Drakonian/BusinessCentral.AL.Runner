@@ -923,11 +923,17 @@ public static class AlTranspiler
                 if (inner is AggregateException innerAgg)
                 {
                     foreach (var innerInner in innerAgg.Flatten().InnerExceptions)
+                    {
                         failedMethods.Add(innerInner.Message);
+                        if (Log.Verbose)
+                            Log.Info($"  emit exception: {innerInner}");
+                    }
                 }
                 else
                 {
                     failedMethods.Add(inner.Message);
+                    if (Log.Verbose)
+                        Log.Info($"  emit exception: {inner}");
                 }
             }
             Log.Info($"Partial transpilation: {failedMethods.Count} method(s) skipped");
