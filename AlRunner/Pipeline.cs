@@ -135,7 +135,7 @@ public class AlRunnerPipeline
         var stdoutStr = stdout.ToString();
         if (options.OutputJson && (testResults.Count > 0 || messages.Count > 0))
         {
-            var compilationErrors = RoslynCompiler.ExcludedFiles.Count > 0 ? RoslynCompiler.ExcludedFiles : null;
+            Dictionary<string, List<string>>? compilationErrors = null; // file exclusion removed in #80
             stdoutStr = SerializeJsonOutput(testResults, exitCode, capturedValues: capturedValues, messages: messages, iterations: iterationLoops, compilationErrors: compilationErrors);
         }
 

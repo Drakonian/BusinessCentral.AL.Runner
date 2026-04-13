@@ -99,8 +99,8 @@ public class AlRunnerServer
         var pipeline = new AlRunnerPipeline();
         var result = pipeline.Run(options);
 
-        // Capture compilation errors before caching so they survive the next request.
-        var compilationErrors = new Dictionary<string, List<string>>(RoslynCompiler.ExcludedFiles);
+        // Compilation errors (file-level exclusion was removed in #80; always empty now).
+        var compilationErrors = new Dictionary<string, List<string>>();
 
         // Cache the compiled assembly (with its compilation errors) if available.
         if (result.ExitCode == 0 || result.Tests.Count > 0)
@@ -177,8 +177,7 @@ public class AlRunnerServer
         List<string>? changedFiles = null, Dictionary<string, List<string>>? compilationErrors = null)
     {
         // compilationErrors is passed in explicitly — either from the live compilation (cache miss)
-        // or from the stored cache entry (cache hit). Never read the static RoslynCompiler.ExcludedFiles
-        // here, because on cache hits that field holds stale data from the previous request.
+        // or from the stored cache entry (cache hit).
         var compilationErrorsObj = compilationErrors != null && compilationErrors.Count > 0
             ? (object?)compilationErrors.Select(kvp => new
             {
