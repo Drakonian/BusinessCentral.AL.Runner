@@ -1238,6 +1238,8 @@ protected bool CallGetFormatExtensionMethod(int fieldNo, ref string result) { re
 
         // NOTE: We no longer strip 'this' from scope constructor calls.
         // Scope constructors now keep the βparent parameter and store it as _parent.
+        // AlScope implements ITreeObject, so 'this' is a valid non-null ITreeObject
+        // for any Nav*/AL* type constructor — no CS1503 and no null-check failures.
 
         return visited;
     }
