@@ -65,6 +65,12 @@ if (args.Length == 0 || args.Any(a => a is "-h" or "--help"))
     Console.Error.WriteLine("Test codeunits (Subtype = Test) are auto-detected.");
     Console.Error.WriteLine("BC Service Tier DLLs are auto-downloaded on first run.");
     Console.Error.WriteLine();
+    Console.Error.WriteLine("Exit codes:");
+    Console.Error.WriteLine("  0  All tests passed");
+    Console.Error.WriteLine("  1  Test assertion failures (real bugs in code) or usage error");
+    Console.Error.WriteLine("  2  Runner limitations only (no real failures; compilation gaps or missing mocks)");
+    Console.Error.WriteLine("  3  AL compilation error (the AL source itself does not compile)");
+    Console.Error.WriteLine();
     Console.Error.WriteLine("For AI agents: run `al-runner --guide` for a complete test-writing reference.");
     return args.Length == 0 ? 1 : 0;
 }
@@ -483,6 +489,28 @@ Commands:
 - `{"command":"shutdown"}` — exit cleanly
 
 Optional fields: `packagePaths`, `stubPaths`.
+
+### Exit codes
+
+| Code | Meaning |
+|------|---------|
+| 0 | All tests passed |
+| 1 | Test assertion failures (real bugs in the code) or usage error |
+| 2 | Runner limitations only (no real failures — all blocked tests are due to compilation gaps or missing mocks) |
+| 3 | AL compilation error (the AL source itself does not compile) |
+
+Use exit codes in CI to distinguish runner gaps from real failures:
+
+```bash
+al-runner --packages .alpackages ./src ./test
+rc=$?
+if [ $rc -eq 2 ]; then
+  echo "Runner limitations only — not a build failure"
+  exit 0
+elif [ $rc -ne 0 ]; then
+  exit $rc
+fi
+```
 
 ### Tips for AI agents
 
@@ -2082,12 +2110,16 @@ public static class Executor
         Console.WriteLine($"Results: {passed} passed, {failed} failed, {errors} errors, {passed + failed + errors} total");
     }
 
-    /// <summary>Compute exit code from test results.</summary>
+    /// <summary>
+    /// Compute exit code from test results.
+    /// 0 = all passed; 1 = assertion failures (real bugs); 2 = runner limitations only (no failures).
+    /// </summary>
     public static int ExitCode(List<AlRunner.TestResult> results)
     {
         if (results.Count == 0) return 1;
-        var failedOrError = results.Count(r => r.Status != AlRunner.TestStatus.Pass);
-        return failedOrError > 0 ? 1 : 0;
+        if (results.Any(r => r.Status == AlRunner.TestStatus.Fail)) return 1;
+        if (results.Any(r => r.Status != AlRunner.TestStatus.Pass)) return 2;
+        return 0;
     }
 
     private static void CaptureFieldValues(object scope, Type scopeType, string testName)

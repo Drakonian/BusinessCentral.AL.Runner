@@ -19,6 +19,17 @@ All notable changes to this project are documented here. Format based on
 - **Invariant-culture decimal formatting** — `AlCompat.Format()` for decimal values
   now always uses `.` as the decimal separator regardless of OS locale, matching
   real BC behavior.
+- **Differentiated exit codes for CI integration** — al-runner now returns distinct
+  exit codes so CI scripts can distinguish real failures from runner gaps:
+  - `0` — all tests passed
+  - `1` — test assertion failures (real bugs in code) or usage/argument error
+  - `2` — runner limitations only (no assertion failures; all blocked tests are due
+    to Roslyn compilation gaps or missing mock support)
+  - `3` — AL compilation error (the AL source itself does not compile)
+
+  Previously, all non-success outcomes returned `1`. This change enables incremental
+  CI adoption: tolerate exit code `2` while treating `1` and `3` as hard failures.
+  ([#46](https://github.com/StefanMaron/BusinessCentral.AL.Runner/issues/46))
 
 ### Changed
 - **Source files with compilation errors are no longer silently excluded** — Previously,
