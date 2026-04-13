@@ -249,21 +249,21 @@ public class MockRecordHandle
         if (runTrigger)
             TryFireRecordTrigger("OnInsert");
 
-        // Enforce primary-key uniqueness only when the PK is *registered*.
-        // GetPrimaryKeyFields() falls back to `[1]` otherwise, which would
-        // reject legitimate composite-key inserts whose first field
-        // happens to repeat (e.g. multiple lines under the same document).
-        if (_primaryKeys.TryGetValue(_tableId, out var pkFields) && pkFields.Length > 0)
+        // Always enforce primary-key uniqueness.
+        // GetPrimaryKeyFields() returns the registered composite PK when the table's
+        // AL source was parsed by TableFieldRegistry, or falls back to [1] (field 1)
+        // when no PK was registered (e.g. table from an external package or a table
+        // with no explicit keys{} block). BC implicitly uses field 1 as the PK for
+        // any table without a declared key, so the [1] fallback is always correct.
+        var pkFields = GetPrimaryKeyFields();
+        foreach (var existing in table)
         {
-            foreach (var existing in table)
+            if (RowMatchesPrimaryKey(existing, _fields, pkFields))
             {
-                if (RowMatchesPrimaryKey(existing, _fields, pkFields))
-                {
-                    throw new Exception(
-                        $"The {TableName()} already exists. Identification fields and values: " +
-                        string.Join(", ", pkFields.Select(f =>
-                            $"{f}='{(_fields.TryGetValue(f, out var v) ? NavValueToString(v) : "")}'")));
-                }
+                throw new Exception(
+                    $"The {TableName()} already exists. Identification fields and values: " +
+                    string.Join(", ", pkFields.Select(f =>
+                        $"{f}='{(_fields.TryGetValue(f, out var v) ? NavValueToString(v) : "")}'")));
             }
         }
 
@@ -1570,7 +1570,7 @@ public class MockRecordHandle
         {
             var rowVal = row.TryGetValue(fieldNo, out var rv) ? NavValueToString(rv) : "";
             var curVal = current.TryGetValue(fieldNo, out var cv) ? NavValueToString(cv) : "";
-            if (rowVal != curVal) return false;
+            if (!PkValuesEqual(rowVal, curVal)) return false;
         }
         return true;
     }
