@@ -173,7 +173,7 @@ al-runner transpiles AL source to C# and compiles it in-memory. It mocks BC runt
 NavInStream, NavOutStream, NavDialog, etc.) so tests can run without a BC service tier.
 
 Your job: given raw telemetry crash reports and a list of existing GitHub issues, extract every distinct
-technical problem and decide whether it is already tracked.
+technical problem and classify it.
 
 Known limitations (by design — do NOT file issues for these):
 - Report, XMLPort — not supported, by design
@@ -188,41 +188,45 @@ Rules:
 4. If genuinely new and actionable: set "existing_issue_number" to null.
 5. Skip known-by-design limitations entirely — do not include them at all.
 6. Titles must be concise and technical (under 80 chars). No "telemetry:" prefix.
+7. Do NOT generate a body — the script builds the body from raw telemetry data.
+8. Set "source_exception_types" to the list of exception type strings this problem came from.
 
 Return ONLY valid JSON matching this schema (no markdown, no explanation):
 {
   "problems": [
     {
       "title": "string",
-      "body": "string (markdown, describe the gap and paste relevant error lines)",
-      "existing_issue_number": null or integer
+      "existing_issue_number": null or integer,
+      "source_exception_types": ["string"]
     }
   ]
 }"""
 
 def analyze_with_copilot(rows: list[dict], existing_issues: list[dict]) -> list[dict]:
-    """Call GitHub Copilot to extract individual problems from telemetry rows."""
+    """Call GitHub Copilot to classify problems. Returns list of classified problems."""
 
     issues_summary = "\n".join(
         f"#{i['number']}: {i['title']}"
         for i in existing_issues
     )
 
-    # Trim sample_stack to avoid huge payloads — first 2000 chars is enough
-    trimmed_rows = []
+    # For classification we only need the type + message + first ~1000 chars of stack
+    summary_rows = []
     for r in rows:
-        tr = dict(r)
-        if tr.get("sample_stack") and len(tr["sample_stack"]) > 2000:
-            tr["sample_stack"] = tr["sample_stack"][:2000] + "… [truncated]"
-        trimmed_rows.append(tr)
+        summary_rows.append({
+            "type":        r.get("type"),
+            "occurrences": r.get("occurrences"),
+            "sample_msg":  r.get("sample_msg", "")[:1000],
+            "sample_stack": r.get("sample_stack", "")[:1000],
+        })
 
     user_content = f"""Existing open GitHub issues:
 {issues_summary}
 
-Telemetry crash reports from Application Insights:
-{json.dumps(trimmed_rows, indent=2)}
+Telemetry crash reports (summarised for classification):
+{json.dumps(summary_rows, indent=2)}
 
-Extract individual distinct problems. Return JSON only."""
+Classify each distinct problem. Return JSON only."""
 
     headers = {
         "Authorization": f"Bearer {GH_TOKEN}",
@@ -238,7 +242,7 @@ Extract individual distinct problems. Return JSON only."""
         "temperature": 0,
     }
 
-    print("Calling GitHub Copilot for problem analysis…")
+    print("Calling GitHub Copilot for problem classification…")
     result = http_post(GH_MODELS_URL, headers, body)
     content = result["choices"][0]["message"]["content"]
 
@@ -247,6 +251,46 @@ Extract individual distinct problems. Return JSON only."""
     except json.JSONDecodeError as e:
         print(f"Copilot returned invalid JSON: {e}\n{content}", file=sys.stderr)
         return []
+
+
+def build_body(problem: dict, rows: list[dict], from_time: str) -> str:
+    """Build a structured issue/comment body from raw telemetry rows."""
+    source_types = set(problem.get("source_exception_types", []))
+    # Fall back to all rows if Copilot didn't populate source_exception_types
+    relevant = [r for r in rows if r.get("type") in source_types] if source_types else rows
+
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    sections = [f"*Telemetry update — {now} | window: since `{from_time}`*\n"]
+
+    for r in relevant:
+        exc_type    = r.get("type", "Unknown")
+        occurrences = r.get("occurrences", 0)
+        first_seen  = r.get("first_seen", "")
+        last_seen   = r.get("last_seen", "")
+        versions    = r.get("versions", [])
+        os_list     = r.get("os_list", [])
+        sample_msg  = r.get("sample_msg", "") or "(no message)"
+        sample_stack = r.get("sample_stack", "") or "(no stack)"
+
+        ver_str = ", ".join(v for v in versions if v) or "unknown"
+        os_str  = ", ".join(o for o in os_list  if o) or "unknown"
+
+        sections.append(
+            f"### `{exc_type}`\n\n"
+            f"**Occurrences:** {occurrences} &nbsp;|&nbsp; "
+            f"**First seen:** {first_seen} &nbsp;|&nbsp; "
+            f"**Last seen:** {last_seen}  \n"
+            f"**Versions:** {ver_str}  \n"
+            f"**OS:** {os_str}  \n\n"
+            f"**Message:**\n```\n{sample_msg}\n```\n\n"
+            f"**Stack / details:**\n```\n{sample_stack}\n```\n"
+        )
+
+    sections.append(
+        "\n---\n*Only `AlRunner.*` stack frames are collected — "
+        "no AL source code or user file paths.*"
+    )
+    return "\n".join(sections)
 
 # ─── Step 5: GitHub issue management ──────────────────────────────────────────
 
@@ -279,10 +323,7 @@ def create_issue(title: str, body: str):
     )
     print(f"  Created issue #{result['number']}: {title}")
 
-def comment_on_issue(issue_number: int, title: str, body: str, from_time: str):
-    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    comment = f"### Telemetry update — {now}\n\nNew occurrences seen since `{from_time}`.\n\n{body}"
-
+def comment_on_issue(issue_number: int, title: str, body: str):
     # Reopen if closed
     try:
         issue = http_get(f"{GH_API_BASE}/repos/{GH_REPO}/issues/{issue_number}", gh_headers())
@@ -305,7 +346,7 @@ def comment_on_issue(issue_number: int, title: str, body: str, from_time: str):
     http_post(
         f"{GH_API_BASE}/repos/{GH_REPO}/issues/{issue_number}/comments",
         gh_headers(),
-        {"body": comment},
+        {"body": body},
     )
     print(f"  Commented on #{issue_number}: {title}")
 
@@ -344,13 +385,13 @@ def main():
     commented = 0
 
     for p in problems:
-        title  = p.get("title", "Unknown problem")
-        body   = p.get("body", "")
+        title    = p.get("title", "Unknown problem")
         existing = p.get("existing_issue_number")
+        body     = build_body(p, rows, from_time)
 
         if existing:
             print(f"  Already tracked in #{existing}: {title}")
-            comment_on_issue(existing, title, body, from_time)
+            comment_on_issue(existing, title, body)
             commented += 1
         else:
             print(f"  New: {title}")
