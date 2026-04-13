@@ -527,6 +527,8 @@ Follows the `BusinessCentral.AL.*` pattern:
 | File | Role |
 |---|---|
 | `AlRunner/Program.cs` | Main CLI + AlTranspiler + RoslynCompiler + Executor + AppPackageReader + Kernel32Shim + PrintGuide |
+| `AlRunner/DiagnosticClassifier.cs` | AL diagnostic message parser; `IsSelfDuplicateAmbiguity` detects AL0275 self-duplicate packages |
+| `AlRunner/PackageScanner.cs` | Scans package dirs for `.app` files; two-pass deduplication (by GUID then by publisher+name+version) |
 | `AlRunner/RoslynRewriter.cs` | BC→mock type transformations (AST-level) |
 | `AlRunner/Runtime/AlScope.cs` | Base scope, AlDialog, AlCompat, MockDialog |
 | `AlRunner/Runtime/MockRecordHandle.cs` | In-memory record store with filtering, composite PKs, sort ordering |
