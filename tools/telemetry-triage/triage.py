@@ -120,7 +120,7 @@ exceptions
     last_seen    = max(timestamp),
     versions     = make_set(ver, 20),
     os_list      = make_set(os, 10),
-    sample_stack = any(outerStackTrace),
+    sample_stack = any(tostring(details)),
     sample_msg   = any(outerMessage)
   by type
 | order by occurrences desc
