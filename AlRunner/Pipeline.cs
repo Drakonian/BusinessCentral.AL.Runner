@@ -391,7 +391,7 @@ public class AlRunnerPipeline
         if (generatedCSharpList == null)
         {
             Timer.EndStage("AL transpilation");
-            return 1;
+            return 3;
         }
 
         // Compile dependency stubs separately
@@ -493,7 +493,7 @@ public class AlRunnerPipeline
                 }
             }
             Timer.EndStage("Roslyn compilation");
-            return 1;
+            return 2;
         }
         Timer.EndStage("Roslyn compilation");
 
