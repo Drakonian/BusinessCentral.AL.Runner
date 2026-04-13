@@ -237,6 +237,7 @@ test executor that needs no BC service tier, Docker, SQL Server, or license.
 - Table procedures (custom procedures on table objects)
 - IsolatedStorage (in-memory key-value store: Set, Get, Delete, Contains)
 - TextBuilder (Append, AppendLine, ToText)
+- Dialog variable (Open, Update, Close — all no-ops in standalone mode)
 - RecordRef / FieldRef — Open, Close, Field(n).Value get/set, Insert, Modify,
   Delete, DeleteAll, FindSet+Next iteration, GetTable/SetTable, SetRange/SetFilter,
   RecRef := OtherRecRef assignment, SetLoadFields (no-op)

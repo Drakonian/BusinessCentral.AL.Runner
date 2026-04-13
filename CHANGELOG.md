@@ -28,6 +28,15 @@ All notable changes to this project are documented here. Format based on
   failure: all errors are printed to stderr and the runner exits. This ensures you always
   compile the full app or get a clear error — no silent partial results.
 
+### Fixed
+- **`Dialog` variable type now compiles and runs** — AL codeunits that declare a
+  `Dialog` variable and call `Open`, `Update`, and `Close` on it previously failed
+  with `CS1503: cannot convert from 'string' to 'NavText'` when the BC compiler
+  emitted string literals for the dialog format string. `MockDialog.ALOpen` and
+  `ALUpdate` now accept both `string` and `NavText`/`NavValue` overloads, matching
+  all patterns emitted by the BC compiler. Tested by `tests/85-dialog/` (4 test cases).
+  Fixes #63.
+
 ## [1.0.11] — 2026-04-13
 
 ### Added
