@@ -284,11 +284,15 @@ test executor that needs no BC service tier, Docker, SQL Server, or license.
   - ModalPageHandler intercepts Page.RunModal() calls, receives a TestPage handle,
     can set field values and invoke OK/Cancel actions; returns FormResult to caller
   - RequestPageHandler intercepts Report.RunRequestPage() calls
+- Query variables — declaring Query variables compiles; Close/SetFilter/SetRange/
+  TopNumberOfRows are no-ops; Open/Read/SaveAs throw NotSupportedException.
+  Inject query dependencies via an AL interface for unit-testable code.
 
 ### What al-runner does NOT support
 
-- Page and report rendering fidelity — inject via AL interface or exclude from runner
-  when correctness depends on real BC UI/runtime behavior
+- Pages, Reports — stub them via `--stubs <dir>` or inject via AL interface
+- Query data access (Open/Read) — queries require the BC service tier (SQL views);
+  use AL interfaces to inject query results for testing
 - HTTP / REST calls — inject via AL interface
 - Event subscribers — OnAfterModify, OnAfterInsert, etc. do not fire
 - StrMenu is not supported
@@ -625,16 +629,28 @@ public static class AlTranspiler
     public static List<(string Name, string Code)>? TranspileMulti(
         List<string> alSources,
         List<string>? packagePaths = null,
-        List<string>? inputPaths = null)
+        List<string>? inputPaths = null,
+        SyntaxTreeCache? treeCache = null,
+        List<string?>? sourceFilePaths = null)
     {
         // Parse all sources into syntax trees
         var syntaxTrees = new List<SyntaxTree>();
         bool hasErrors = false;
 
-        foreach (var src in alSources)
+        var parsedResults = new (SyntaxTree tree, List<Diagnostic> diags)[alSources.Count];
+        Parallel.For(0, alSources.Count, i =>
         {
-            var tree = SyntaxTree.ParseObjectText(src);
-            var parseDiags = tree.GetDiagnostics().ToList();
+            SyntaxTree tree;
+            if (treeCache != null && sourceFilePaths != null && i < sourceFilePaths.Count && sourceFilePaths[i] != null)
+                tree = treeCache.GetOrParse(sourceFilePaths[i]!, alSources[i]);
+            else
+                tree = SyntaxTree.ParseObjectText(alSources[i]);
+            var diags = tree.GetDiagnostics().ToList();
+            parsedResults[i] = (tree, diags);
+        });
+
+        foreach (var (tree, parseDiags) in parsedResults)
+        {
             if (parseDiags.Any(d => d.Severity == DiagnosticSeverity.Error))
             {
                 Log.Info("AL parse errors:");
@@ -1558,10 +1574,13 @@ public static class SourceLineMapper
 // ===========================================================================
 public static class RoslynCompiler
 {
-    public static Assembly? Compile(string csharpSource) =>
+    /// <summary>Bundles the compiled assembly with its collectible ALC so callers can unload it.</summary>
+    public record CompileResult(Assembly Assembly, System.Runtime.Loader.AssemblyLoadContext LoadContext);
+
+    public static CompileResult? Compile(string csharpSource) =>
         Compile(new List<(string Name, string Code)> { ("source", csharpSource) });
 
-    public static Assembly? Compile(List<(string Name, string Code)> namedSources)
+    public static CompileResult? Compile(List<(string Name, string Code)> namedSources)
     {
         // Parse source strings into syntax trees, then delegate to the tree-based overload
         var nameCount = new Dictionary<string, int>();
@@ -1589,7 +1608,7 @@ public static class RoslynCompiler
     /// Trees are re-rooted with deduplicated file paths for readable diagnostics.
     /// Optionally accepts pre-loaded MetadataReferences to skip redundant loading.
     /// </summary>
-    internal static Assembly? Compile(List<(string Name, Microsoft.CodeAnalysis.SyntaxTree Tree)> namedTrees,
+    internal static CompileResult? Compile(List<(string Name, Microsoft.CodeAnalysis.SyntaxTree Tree)> namedTrees,
         List<Microsoft.CodeAnalysis.MetadataReference>? preloadedReferences = null)
     {
         // Assign deduplicated file paths to trees for readable Roslyn diagnostics
@@ -1726,12 +1745,12 @@ public static class RoslynCompiler
         return references.ToList();
     }
 
-    private static Assembly? CompileFromTrees(List<Microsoft.CodeAnalysis.SyntaxTree> syntaxTrees)
+    private static CompileResult? CompileFromTrees(List<Microsoft.CodeAnalysis.SyntaxTree> syntaxTrees)
     {
         return CompileFromTrees(syntaxTrees, null);
     }
 
-    internal static Assembly? CompileFromTrees(List<Microsoft.CodeAnalysis.SyntaxTree> syntaxTrees,
+    internal static CompileResult? CompileFromTrees(List<Microsoft.CodeAnalysis.SyntaxTree> syntaxTrees,
         List<Microsoft.CodeAnalysis.MetadataReference>? preloadedReferences)
     {
         var references = preloadedReferences ?? LoadReferences();
@@ -1744,7 +1763,7 @@ public static class RoslynCompiler
                 Microsoft.CodeAnalysis.OutputKind.DynamicallyLinkedLibrary)
                 .WithAllowUnsafe(true));
 
-        using var ms = new MemoryStream();
+        using var ms = new MemoryStream(512 * 1024);
         var result = compilation.Emit(ms);
 
         if (!result.Success)
@@ -1759,7 +1778,12 @@ public static class RoslynCompiler
         }
 
         ms.Seek(0, SeekOrigin.Begin);
-        return Assembly.Load(ms.ToArray());
+        // Collectible ALC: the assembly (and its ALC) stays alive as long as any
+        // reference to the Assembly or ALC exists (e.g., in CompilationCache).
+        // Callers must call alc.Unload() when the assembly is no longer needed.
+        var alc = new System.Runtime.Loader.AssemblyLoadContext($"TestRun_{Guid.NewGuid():N}", isCollectible: true);
+        var assembly = alc.LoadFromStream(ms);
+        return new CompileResult(assembly, alc);
     }
 
     private const string BcArtifactVersion = "27.5.46862.48827";
@@ -2190,7 +2214,7 @@ public static class Executor
         var failed = results.Count(r => r.Status == AlRunner.TestStatus.Fail);
         var blocked = results.Count(r => r.Status == AlRunner.TestStatus.Error && r.IsRunnerBug);
         var errors = results.Count(r => r.Status == AlRunner.TestStatus.Error && !r.IsRunnerBug);
-        var timeStr = totalMs.HasValue ? $" in {totalMs.Value / 1000.0:0.0}s" : "";
+        var timeStr = totalMs.HasValue ? $" in {(totalMs.Value / 1000.0).ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)}s" : "";
         var parts = new System.Collections.Generic.List<string> { $"{passed} passed" };
         if (failed > 0) parts.Add($"{failed} failed");
         if (blocked > 0) parts.Add($"{blocked} blocked (runner limitation)");

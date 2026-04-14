@@ -227,14 +227,34 @@ public class RoslynRewriter : CSharpSyntaxRewriter
             return stubClass;
         }
 
-        // Report / ReportExtension / Query generated classes pull in BC runtime
-        // types and layout infrastructure that do not exist in standalone mode.
-        // Keep the type shape and generated helper-procedure dispatch members,
-        // but strip BC-only inheritance and unsupported runtime/layout members.
+        // Query object classes (QueryNNNN : NavQuery) reference NCLMetaQuery,
+        // data-item handles, and other service-tier infrastructure that cannot
+        // compile in standalone mode. Replace the entire class with a minimal
+        // stub that extends MockQueryHandle, identical to the XmlPort pattern.
+        if (node.BaseList != null && node.BaseList.Types.Any(
+                t => t.Type.ToString() == "NavQuery"))
+        {
+            var stubClass = node
+                .WithBaseList(SyntaxFactory.BaseList(
+                    SyntaxFactory.SingletonSeparatedList<BaseTypeSyntax>(
+                        SyntaxFactory.SimpleBaseType(
+                            SyntaxFactory.ParseTypeName("AlRunner.Runtime.MockQueryHandle")))))
+                .WithMembers(SyntaxFactory.List<MemberDeclarationSyntax>(new[]
+                {
+                    SyntaxFactory.ParseMemberDeclaration(
+                        $"public {node.Identifier.Text}() {{ }}")!
+                }))
+                .WithAttributeLists(SyntaxFactory.List<AttributeListSyntax>());
+            return stubClass;
+        }
+
+        // Report / ReportExtension generated classes pull in BC runtime types and
+        // layout infrastructure that do not exist in standalone mode. Keep the type
+        // shape and generated helper-procedure dispatch members, but strip BC-only
+        // inheritance and unsupported runtime/layout members.
         if (node.BaseList != null && node.BaseList.Types.Any(
                 t => t.Type.ToString() is "NavReport" or "NavReportExtension"
-                    or "RequestPageBase" or "NavRequestPageExtension"
-                    or "NavQuery"))
+                    or "RequestPageBase" or "NavRequestPageExtension"))
         {
             var preservedMembers = new List<MemberDeclarationSyntax>();
 
@@ -908,6 +928,15 @@ public void ClearApplicationMemberVariables() { }
         if (text == "NavXmlPortHandle")
             return node.WithIdentifier(SyntaxFactory.Identifier("MockXmlPortHandle"));
 
+        // NavQueryHandle -> MockQueryHandle
+        // BC emits `Query "X"` AL variables as `NavQueryHandle q` fields with
+        // `new NavQueryHandle(this, queryId, SecurityFiltering)` initializers.
+        // The real ctor wants ITreeObject which standalone mode lacks.  After
+        // the existing .Target-stripping rewrite, query API calls (ALOpen,
+        // ALRead, ALSetFilter, etc.) are called directly on the handle.
+        if (text == "NavQueryHandle")
+            return node.WithIdentifier(SyntaxFactory.Identifier("MockQueryHandle"));
+
         // NavRecordRef -> MockRecordRef
         // NavRecordRef's real ctor wants ITreeObject; MockRecordRef has a
         // parameterless ctor and stub methods so the AL declaration compiles.
@@ -1162,6 +1191,37 @@ public void ClearApplicationMemberVariables() { }
                 visited.ArgumentList.Arguments[0].Expression.ToString() == "this")
             {
                 // Single-arg form with 'this' (no ID) — strip the ITreeObject parent.
+                return visited.WithArgumentList(SyntaxFactory.ArgumentList());
+            }
+        }
+
+        // new MockQueryHandle(this, queryId, SecurityFiltering) -> new MockQueryHandle(queryId, SecurityFiltering)
+        // BC emits `new NavQueryHandle(this, queryId, SecurityFiltering.Filtered)` in scope-class
+        // field initializers. Strip ITreeObject 'this', keep query ID and SecurityFiltering.
+        if (typeText == "MockQueryHandle" && visited.ArgumentList != null)
+        {
+            if (visited.ArgumentList.Arguments.Count == 3)
+            {
+                // 3 args: (this, queryId, SecurityFiltering) → keep args [1] and [2].
+                return visited.WithArgumentList(
+                    SyntaxFactory.ArgumentList(
+                        SyntaxFactory.SeparatedList(new[]
+                        {
+                            visited.ArgumentList.Arguments[1],
+                            visited.ArgumentList.Arguments[2]
+                        })));
+            }
+            if (visited.ArgumentList.Arguments.Count == 2 &&
+                visited.ArgumentList.Arguments[0].Expression.ToString() == "this")
+            {
+                // 2 args: (this, queryId) → keep arg [1].
+                return visited.WithArgumentList(
+                    SyntaxFactory.ArgumentList(
+                        SyntaxFactory.SingletonSeparatedList(visited.ArgumentList.Arguments[1])));
+            }
+            if (visited.ArgumentList.Arguments.Count == 1 &&
+                visited.ArgumentList.Arguments[0].Expression.ToString() == "this")
+            {
                 return visited.WithArgumentList(SyntaxFactory.ArgumentList());
             }
         }
@@ -1600,6 +1660,20 @@ public void ClearApplicationMemberVariables() { }
                         SyntaxKind.SimpleMemberAccessExpression,
                         SyntaxFactory.IdentifierName("MockXmlPortHandle"),
                         SyntaxFactory.IdentifierName(stubMethod)),
+                    visited.ArgumentList);
+            }
+
+            // NavQuery.ALSaveAsCsv/ALSaveAsXml/ALSaveAsJson/ALSaveAsExcel -> MockQueryHandle statics
+            // BC emits these static calls for Query.SaveAsCsv(queryId, ...) etc.
+            // NavQuery requires the service tier; forward to MockQueryHandle stubs.
+            if (exprText == "NavQuery" && (methodName == "ALSaveAsCsv" || methodName == "ALSaveAsXml"
+                || methodName == "ALSaveAsJson" || methodName == "ALSaveAsExcel"))
+            {
+                return SyntaxFactory.InvocationExpression(
+                    SyntaxFactory.MemberAccessExpression(
+                        SyntaxKind.SimpleMemberAccessExpression,
+                        SyntaxFactory.IdentifierName("MockQueryHandle"),
+                        SyntaxFactory.IdentifierName(methodName)),
                     visited.ArgumentList);
             }
 
