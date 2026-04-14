@@ -229,19 +229,56 @@ public class RoslynRewriter : CSharpSyntaxRewriter
 
         // Report / ReportExtension / Query generated classes pull in BC runtime
         // types and layout infrastructure that do not exist in standalone mode.
-        // Keep the type shape for downstream references, but stub the body.
+        // Keep the type shape and generated helper-procedure dispatch members,
+        // but strip BC-only inheritance and unsupported runtime/layout members.
         if (node.BaseList != null && node.BaseList.Types.Any(
                 t => t.Type.ToString() is "NavReport" or "NavReportExtension"
                     or "RequestPageBase" or "NavRequestPageExtension"
                     or "NavQuery"))
         {
+            var preservedMembers = new List<MemberDeclarationSyntax>();
+
+            foreach (var member in node.Members)
+            {
+                // Skip constructors — they call base() which no longer exists.
+                if (member is ConstructorDeclarationSyntax)
+                    continue;
+
+                if (member is MethodDeclarationSyntax method)
+                {
+                    // Skip override methods (OnClear, OnInvoke, OnMetadataLoaded) —
+                    // they reference base class infrastructure we removed.
+                    if (method.Modifiers.Any(SyntaxKind.OverrideKeyword))
+                        continue;
+                    // Skip InitializeComponent — references BC fields/properties
+                    // (BeginInitialization, Add, EndInitialization, RequestOptionsPage).
+                    if (method.Identifier.Text == "InitializeComponent")
+                        continue;
+                    // Skip __Construct factory methods — they call removed constructors.
+                    if (method.Identifier.Text == "__Construct")
+                        continue;
+
+                    if (Visit(method) is MemberDeclarationSyntax visitedMethod)
+                        preservedMembers.Add(visitedMethod);
+                }
+                else if (member is ClassDeclarationSyntax
+                    or StructDeclarationSyntax
+                    or InterfaceDeclarationSyntax
+                    or EnumDeclarationSyntax
+                    or DelegateDeclarationSyntax)
+                {
+                    if (Visit(member) is MemberDeclarationSyntax visitedMember)
+                        preservedMembers.Add(visitedMember);
+                }
+            }
+
+            preservedMembers.Insert(0,
+                SyntaxFactory.ParseMemberDeclaration(
+                    $"public {node.Identifier.Text}() {{ }}")!);
+
             var stubClass = node
                 .WithBaseList(null)
-                .WithMembers(SyntaxFactory.List<MemberDeclarationSyntax>(new[]
-                {
-                    SyntaxFactory.ParseMemberDeclaration(
-                        $"public {node.Identifier.Text}() {{ }}")!
-                }))
+                .WithMembers(SyntaxFactory.List(preservedMembers))
                 .WithAttributeLists(SyntaxFactory.List<AttributeListSyntax>());
             return stubClass;
         }

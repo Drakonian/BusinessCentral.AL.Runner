@@ -17,6 +17,16 @@ report 91000 "RH Test Report"
         {
         }
     }
+
+    procedure GetReportTitle(): Text[100]
+    begin
+        exit('RH Test Report Title');
+    end;
+
+    procedure AddNumbers(A: Integer; B: Integer): Integer
+    begin
+        exit(A + B);
+    end;
 }
 
 codeunit 91001 "RH Report Runner"
@@ -41,5 +51,19 @@ codeunit 91001 "RH Report Runner"
         Rep: Report "RH Test Report";
     begin
         exit(Rep.RunRequestPage());
+    end;
+
+    procedure GetReportTitle(): Text[100]
+    var
+        Rep: Report "RH Test Report";
+    begin
+        exit(Rep.GetReportTitle());
+    end;
+
+    procedure AddViaReport(A: Integer; B: Integer): Integer
+    var
+        Rep: Report "RH Test Report";
+    begin
+        exit(Rep.AddNumbers(A, B));
     end;
 }

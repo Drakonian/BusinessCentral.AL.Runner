@@ -13,7 +13,7 @@ All notable changes to this project are documented here. Format based on
   generated classes are stubbed so BC-only layout/runtime infrastructure does not block
   compilation. `rendering { ... }` blocks and `DefaultRenderingLayout` properties are
   stripped from report AL source before transpilation.
-  Tested by `tests/91-report-handle/` (3 test cases) and `tests/95-rendering-strip/` (2 test cases).
+  Tested by `tests/91-report-handle/` (6 test cases) and `tests/95-rendering-strip/` (2 test cases).
 - **`[RequestPageHandler]` dispatch** — `HandlerRegistry` now registers and invokes
   `[RequestPageHandler]` procedures for `Report.RunRequestPage()` calls, with fallback
   to `[ModalPageHandler]` when no dedicated request-page handler is registered.
@@ -29,7 +29,7 @@ All notable changes to this project are documented here. Format based on
 - **`ClearFieldValue`** — `MockRecordHandle.ClearFieldValue(fieldNo)` resets a single
   field to its default. The rewriter redirects `ALSystemVariable.Clear(x)` to
   `x.Clear()` for RecordRef and similar types.
-  Tested by `tests/94-clear-field-value/` (3 test cases).
+  Tested by `tests/94-clear-field-value/` (6 test cases).
 - **`ALGetView` / `ALSetView`** — `MockRecordHandle` stores and returns view text.
   `MockRecordRef.ALSetView` now delegates to the underlying handle.
 - **Global array variables** — `MockRecordHandle.GetGlobalArrayVariable()` returns

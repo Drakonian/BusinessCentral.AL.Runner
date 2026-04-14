@@ -428,7 +428,7 @@ These have been implemented and are tested by the test suite:
     Report and report-extension generated classes are stubbed so BC-only layout/runtime
     infrastructure does not block compilation. `rendering { ... }` blocks and
     `DefaultRenderingLayout` properties are stripped from report AL source before
-    transpilation. Tested by `tests/91-report-handle/` (3 test cases) and
+    transpilation. Tested by `tests/91-report-handle/` (6 test cases) and
     `tests/95-rendering-strip/` (2 test cases).
 
 16. **`[RequestPageHandler]` dispatch** (`Runtime/HandlerRegistry.cs`) — `HandlerRegistry`
@@ -445,7 +445,7 @@ These have been implemented and are tested by the test suite:
     its default by removing it from the field dictionary. Supports both direct and
     extension-scoped overloads. The rewriter redirects `ALSystemVariable.Clear(x)` to
     `x.Clear()` for non-NavComplexValue types. Tested by `tests/94-clear-field-value/`
-    (3 test cases).
+    (6 test cases).
 
 ## Remaining Gaps
 

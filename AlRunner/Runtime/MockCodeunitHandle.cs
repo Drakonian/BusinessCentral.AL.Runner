@@ -570,9 +570,6 @@ public class MockCodeunitHandle
     }
 
     /// <summary>
-    /// Scores how well a method's parameter types match the actual argument types.
-    /// Higher score = better match. Used for fallback method resolution when exact
-    /// <summary>
     /// Score how well a reflected method's parameter types match the supplied arguments.
     /// Used by both <see cref="MockCodeunitHandle"/> and <see cref="MockReportHandle"/>
     /// for overload resolution during reflection-based dispatch.

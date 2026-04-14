@@ -68,6 +68,30 @@ codeunit 91002 "RH Report Handle Tests"
         Assert.IsTrue(true, 'Run without SetTableView should not crash');
     end;
 
+    [Test]
+    procedure ReportHelperProcedureDispatch()
+    var
+        Runner: Codeunit "RH Report Runner";
+    begin
+        // [GIVEN] A report with a helper procedure
+        // [WHEN] The helper procedure is called via the report variable
+        // [THEN] It should dispatch correctly and return the expected value
+        Assert.AreEqual('RH Test Report Title', Runner.GetReportTitle(),
+            'Report helper procedure should return correct value');
+    end;
+
+    [Test]
+    procedure ReportHelperProcedureWithArgs()
+    var
+        Runner: Codeunit "RH Report Runner";
+    begin
+        // [GIVEN] A report with a helper procedure that takes arguments
+        // [WHEN] Called with integer arguments
+        // [THEN] It should dispatch correctly with argument conversion
+        Assert.AreEqual(7, Runner.AddViaReport(3, 4),
+            'Report helper procedure should handle arguments correctly');
+    end;
+
     var
         Rec: Record "RH Test Data";
 }
