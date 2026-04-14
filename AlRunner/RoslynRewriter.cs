@@ -2251,6 +2251,56 @@ public void ClearApplicationMemberVariables() { }
                         SyntaxFactory.IdentifierName("LastErrorText"));
                 }
             }
+
+            // NavHttpContent.ALLoadFrom(MockInStream) — CS1503 after NavInStream→MockInStream rename.
+            // BC emits two distinct patterns for HttpContent.WriteFrom(InStream):
+            //   • var-parameter:    content.ALLoadFrom(this.bodyStream.Value)  — ByRef<MockInStream>.Value
+            //   • local-variable:   content.ALLoadFrom(this.localStream)       — direct MockInStream field
+            // A guard on ".Value" alone (arg.Expression is MemberAccessExpression{Name:"Value"}) would
+            // only cover the ByRef case and silently leave the local-variable case broken (still CS1503).
+            // ALLoadFrom is unique to NavHttpContent in BC-generated code; the AlCompat overloads cover
+            // both MockInStream (stream case) and NavText (text case, passthrough). If an unrelated
+            // receiver type ever appeared, its non-NavHttpContent first arg would produce a targeted
+            // CS1503 at the AlCompat call site — visible immediately and easy to fix with a new overload.
+            if (methodName == "ALLoadFrom" && visited.ArgumentList.Arguments.Count == 1)
+            {
+                var receiver = memberAccess.Expression;
+                var arg = visited.ArgumentList.Arguments[0];
+                return SyntaxFactory.InvocationExpression(
+                    SyntaxFactory.MemberAccessExpression(
+                        SyntaxKind.SimpleMemberAccessExpression,
+                        SyntaxFactory.IdentifierName("AlCompat"),
+                        SyntaxFactory.IdentifierName("HttpContentLoadFrom")),
+                    SyntaxFactory.ArgumentList(
+                        SyntaxFactory.SeparatedList<ArgumentSyntax>(new[] {
+                            SyntaxFactory.Argument(receiver),
+                            arg
+                        })));
+            }
+
+            // NavHttpContent.ALReadAs(this, DataError, ByRef<MockInStream>) — CS1503.
+            // BC emits content.ALReadAs(this, DataError.ThrowError, bodyStream) for
+            // HttpContent.ReadAs(var Stream: InStream).  After NavInStream→MockInStream rename
+            // the ByRef<MockInStream> is incompatible with ByRef<NavInStream>.
+            // Only the 3-arg form (stream variant) needs the redirect; the 2-arg form
+            // (text variant: ALReadAs(DataError, ByRef<NavText>)) works without changes.
+            if (methodName == "ALReadAs" && visited.ArgumentList.Arguments.Count == 3)
+            {
+                var receiver = memberAccess.Expression;
+                var args = visited.ArgumentList.Arguments;
+                return SyntaxFactory.InvocationExpression(
+                    SyntaxFactory.MemberAccessExpression(
+                        SyntaxKind.SimpleMemberAccessExpression,
+                        SyntaxFactory.IdentifierName("AlCompat"),
+                        SyntaxFactory.IdentifierName("HttpContentReadAs")),
+                    SyntaxFactory.ArgumentList(
+                        SyntaxFactory.SeparatedList<ArgumentSyntax>(new[] {
+                            SyntaxFactory.Argument(receiver),
+                            args[0],
+                            args[1],
+                            args[2]
+                        })));
+            }
         }
 
         return visited;

@@ -1,5 +1,5 @@
 using Microsoft.Dynamics.Nav.Runtime;
-
+using Microsoft.Dynamics.Nav.Types;
 namespace AlRunner.Runtime;
 
 /// <summary>
@@ -1189,5 +1189,58 @@ public static class AlCompat
         _random ??= new Random();
         if (maxNumber <= 0) return 0;
         return _random.Next(1, maxNumber + 1);
+    }
+
+    // -----------------------------------------------------------------------
+    // HttpContent stream helpers
+    // -----------------------------------------------------------------------
+    // After the NavInStream→MockInStream type rename in the rewriter, calls to
+    // NavHttpContent.ALLoadFrom(NavInStream) and .ALReadAs(ITreeObject, DataError,
+    // ByRef<NavInStream>) fail with CS1503 because MockInStream/ByRef<MockInStream>
+    // is not compatible with the real Nav types. The rewriter redirects those calls
+    // to AlCompat.HttpContentLoadFrom / AlCompat.HttpContentReadAs which accept
+    // the mock stream types.
+    // -----------------------------------------------------------------------
+
+    /// <summary>
+    /// Replacement for NavHttpContent.ALLoadFrom(MockInStream).
+    /// BC emits content.ALLoadFrom(inStream.Value) for HttpContent.WriteFrom(InStream).
+    /// Reads all available text from the mock stream and loads it as UTF-8 content.
+    /// </summary>
+    public static void HttpContentLoadFrom(NavHttpContent content, MockInStream stream)
+    {
+        content.ALLoadFrom(new NavText(stream.ReadAll()));
+    }
+
+    /// <summary>
+    /// Passthrough for NavHttpContent.ALLoadFrom(NavText) — text variant of
+    /// HttpContent.WriteFrom(Text) still routes through here after the rewriter
+    /// redirect so the same AlCompat.HttpContentLoadFrom name handles both overloads.
+    /// </summary>
+    public static void HttpContentLoadFrom(NavHttpContent content, NavText text)
+        => content.ALLoadFrom(text);
+
+    /// <summary>
+    /// Replacement for NavHttpContent.ALReadAs(ITreeObject, DataError, ByRef&lt;NavInStream&gt;).
+    /// BC emits content.ALReadAs(this, DataError.ThrowError, stream) for
+    /// HttpContent.ReadAs(var Stream: InStream). In standalone mode this is a no-op.
+    ///
+    /// Why not round-trip via content.ALReadAs(DataError, ByRef&lt;NavText&gt;)?
+    /// NavHttpContent is a NavComplexValue whose constructor stores the ITreeObject parent
+    /// reference and accesses parent.Tree on every method call. In standalone mode the
+    /// parent is AlScope whose Tree property returns null. Any NavHttpContent method call —
+    /// including the 2-arg text form — throws "Parent.Tree cannot be null" at runtime.
+    /// The only safe operations on NavHttpContent in standalone mode are those redirected
+    /// here (ALLoadFrom via AlCompat) or the ALReadAs 2-arg text form on scopes that
+    /// genuinely have a session (not our test scopes). Providing an empty MockInStream is
+    /// the correct observable behaviour: ReadAs on a never-sent response returns nothing.
+    /// </summary>
+    public static void HttpContentReadAs(NavHttpContent content, object? scope, DataError errorLevel, ByRef<MockInStream> stream)
+    {
+        // NavHttpContent requires a live NavSession (Parent.Tree != null) for every method
+        // call. In standalone mode calling content.ALReadAs(...) would throw immediately.
+        // Return an empty stream so the AL variable is initialised and subsequent
+        // InStream reads return end-of-stream rather than a NullReferenceException.
+        stream.Value = new MockInStream();
     }
 }
