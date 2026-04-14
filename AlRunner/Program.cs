@@ -223,9 +223,11 @@ if (!string.IsNullOrEmpty(result.StdOut))
 if (!string.IsNullOrEmpty(result.StdErr))
     Console.Error.Write(result.StdErr);
 
-// Report pipeline gaps (runtime errors) via telemetry
+// Report pipeline gaps (rewriter, compilation, runtime) via telemetry
 await AlRunner.TelemetryReporter.TryReportPipelineGapsAsync(
-    result.Tests, options.OutputJson, noTelemetry);
+    result.Tests, options.OutputJson, noTelemetry,
+    rewriterErrors: result.RewriterErrors,
+    compilationErrors: result.CompilationErrors);
 
 return result.ExitCode;
 
@@ -1663,9 +1665,11 @@ public static class RoslynCompiler
     /// Compile from pre-built SyntaxTrees (avoids re-parsing rewritten C#).
     /// Trees are re-rooted with deduplicated file paths for readable diagnostics.
     /// Optionally accepts pre-loaded MetadataReferences to skip redundant loading.
+    /// If <paramref name="errorSink"/> is provided, compiler error messages are also added to it.
     /// </summary>
     internal static CompileResult? Compile(List<(string Name, Microsoft.CodeAnalysis.SyntaxTree Tree)> namedTrees,
-        List<Microsoft.CodeAnalysis.MetadataReference>? preloadedReferences = null)
+        List<Microsoft.CodeAnalysis.MetadataReference>? preloadedReferences = null,
+        IList<string>? errorSink = null)
     {
         // Assign deduplicated file paths to trees for readable Roslyn diagnostics
         var nameCount = new Dictionary<string, int>();
@@ -1685,7 +1689,7 @@ public static class RoslynCompiler
             return t.Tree.WithFilePath($"{baseName}.cs");
         }).ToList();
 
-        return CompileFromTrees(syntaxTrees, preloadedReferences);
+        return CompileFromTrees(syntaxTrees, preloadedReferences, errorSink);
     }
 
     /// <summary>
@@ -1807,7 +1811,8 @@ public static class RoslynCompiler
     }
 
     internal static CompileResult? CompileFromTrees(List<Microsoft.CodeAnalysis.SyntaxTree> syntaxTrees,
-        List<Microsoft.CodeAnalysis.MetadataReference>? preloadedReferences)
+        List<Microsoft.CodeAnalysis.MetadataReference>? preloadedReferences,
+        IList<string>? errorSink = null)
     {
         var references = preloadedReferences ?? LoadReferences();
 
@@ -1829,7 +1834,15 @@ public static class RoslynCompiler
                 .ToList();
             Console.Error.WriteLine($"Roslyn compilation failed ({errors.Count} errors):");
             foreach (var d in errors)
-                Console.Error.WriteLine($"  {SourceLineMapper.FormatDiagnostic(d)}");
+            {
+                var formatted = SourceLineMapper.FormatDiagnostic(d);
+                Console.Error.WriteLine($"  {formatted}");
+                errorSink?.Add(formatted);
+            }
+            Console.Error.WriteLine();
+            Console.Error.WriteLine("  ⚑ These errors may indicate AL constructs not yet handled by the runner's rewriter.");
+            Console.Error.WriteLine("  Use --dump-rewritten to inspect the rewritten C# code.");
+            Console.Error.WriteLine("  You may be prompted to report this via telemetry in interactive mode (run with --no-telemetry to opt out).");
             return null;
         }
 
@@ -2123,7 +2136,7 @@ public static class Executor
                 while (inner is TargetInvocationException tie && tie.InnerException != null)
                     inner = tie.InnerException;
 
-                if (inner is NotSupportedException or AlRunner.Runtime.CompilationExcludedException)
+                if (inner is NotSupportedException)
                 {
                     results.Add(new AlRunner.TestResult
                     {
@@ -2136,13 +2149,13 @@ public static class Executor
                         CodeunitName = codeunitName
                     });
                 }
-                else if (IsRunnerError(inner!))
+                else if (IsRunnerError(inner!) || IsLikelyRunnerLimitation(inner!))
                 {
                     results.Add(new AlRunner.TestResult
                     {
                         Name = testName,
                         Status = AlRunner.TestStatus.Error,
-                        Message = inner!.Message,
+                        Message = $"{inner!.GetType().Name}: {inner.Message}",
                         StackTrace = FormatStackFrames(inner),
                         AlSourceLine = FindAlSourceLine(inner),
                         AlSourceColumn = FindAlSourceColumn(inner),
@@ -2164,28 +2177,15 @@ public static class Executor
                     });
                 }
             }
-            catch (AlRunner.Runtime.CompilationExcludedException ex)
-            {
-                results.Add(new AlRunner.TestResult
-                {
-                    Name = testName,
-                    Status = AlRunner.TestStatus.Error,
-                    Message = $"{ex.GetType().Name}: {ex.Message}",
-                    StackTrace = FormatStackFrames(ex),
-                    AlSourceLine = FindAlSourceLine(ex),
-                    AlSourceColumn = FindAlSourceColumn(ex),
-                    CodeunitName = codeunitName
-                });
-            }
             catch (Exception ex)
             {
-                if (IsRunnerError(ex))
+                if (IsRunnerError(ex) || IsLikelyRunnerLimitation(ex))
                 {
                     results.Add(new AlRunner.TestResult
                     {
                         Name = testName,
                         Status = AlRunner.TestStatus.Error,
-                        Message = ex.Message,
+                        Message = $"{ex.GetType().Name}: {ex.Message}",
                         StackTrace = FormatStackFrames(ex),
                         AlSourceLine = FindAlSourceLine(ex),
                         AlSourceColumn = FindAlSourceColumn(ex),
@@ -2361,6 +2361,49 @@ public static class Executor
             foreach (var loader in rtle.LoaderExceptions)
                 if (loader != null && IsRunnerError(loader))
                     return true;
+
+        return false;
+    }
+
+    /// <summary>
+    /// Returns true when the exception is likely a runner limitation based on
+    /// heuristic analysis of the exception type or call-stack origin.
+    /// Used as a generic catch-all for unrecognized exceptions that fall through
+    /// the specific handlers so they are reported as <see cref="AlRunner.TestStatus.Error"/>
+    /// rather than <see cref="AlRunner.TestStatus.Fail"/>.
+    /// <list type="bullet">
+    ///   <item><term><see cref="MissingMethodException"/> / <see cref="MissingMemberException"/></term>
+    ///     <description>A BC runtime method exists in the AL language but has not yet been
+    ///     mocked by the runner — always a runner limitation.</description></item>
+    ///   <item><term>Exception originating from BC runtime DLLs</term>
+    ///     <description>When the <em>innermost</em> stack frame (where the exception was thrown)
+    ///     belongs to <c>Microsoft.Dynamics.Nav.*</c> or <c>Microsoft.BusinessCentral.*</c>,
+    ///     the crash happened inside BC service-tier code that requires context (e.g.
+    ///     <c>NavSession</c>) that the runner does not provide.
+    ///     Only the first frame is examined to avoid false positives from BC runtime frames
+    ///     that appear further up the stack during normal AL execution.</description></item>
+    /// </list>
+    /// </summary>
+    public static bool IsLikelyRunnerLimitation(Exception ex)
+    {
+        // A missing method means a BC runtime call wasn't intercepted by the rewriter
+        // or mocked in the Runtime layer — always a runner gap.
+        if (ex is MissingMethodException or MissingMemberException)
+            return true;
+
+        // An exception whose innermost frame originates from BC runtime DLLs indicates
+        // the runner is calling service-tier code without the required context.
+        // Only the innermost frame (frame 0) is checked so that BC frames appearing
+        // deeper in the call stack during normal AL execution do not produce false positives.
+        var throwingNamespace = new System.Diagnostics.StackTrace(ex)
+            .GetFrame(0)?
+            .GetMethod()?
+            .DeclaringType?
+            .Namespace;
+        if (throwingNamespace != null &&
+            (throwingNamespace.StartsWith("Microsoft.Dynamics.Nav.", StringComparison.Ordinal) ||
+             throwingNamespace.StartsWith("Microsoft.BusinessCentral.", StringComparison.Ordinal)))
+            return true;
 
         return false;
     }

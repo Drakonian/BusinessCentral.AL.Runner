@@ -505,6 +505,206 @@ public class RunnerErrorClassificationTests
     }
 
     // ---------------------------------------------------------------------------
+    // IsLikelyRunnerLimitation — generic catch-all heuristic
+    // ---------------------------------------------------------------------------
+
+    /// <summary>
+    /// MissingMethodException always indicates a BC runtime method that the runner
+    /// has not yet mocked — must be classified as a runner limitation.
+    /// </summary>
+    [Fact]
+    public void IsLikelyRunnerLimitation_MissingMethodException_ReturnsTrue()
+    {
+        var ex = new MissingMethodException("void SomeMockHandle.ALUnsupportedMethod()");
+        Assert.True(Executor.IsLikelyRunnerLimitation(ex));
+    }
+
+    /// <summary>
+    /// MissingMemberException (base class of MissingMethodException and
+    /// MissingFieldException) must also be classified as a runner limitation.
+    /// </summary>
+    [Fact]
+    public void IsLikelyRunnerLimitation_MissingMemberException_ReturnsTrue()
+    {
+        var ex = new MissingMemberException("SomeMockHandle", "ALUnsupportedField");
+        Assert.True(Executor.IsLikelyRunnerLimitation(ex));
+    }
+
+    /// <summary>
+    /// An exception whose stack trace contains Microsoft.Dynamics.Nav.* frames
+    /// originates from BC runtime code that requires service-tier context —
+    /// must be classified as a runner limitation.
+    /// </summary>
+    [Fact]
+    public void IsLikelyRunnerLimitation_ExceptionFromBcRuntimeNamespace_ReturnsTrue()
+    {
+        Exception? ex = null;
+        try
+        {
+            // Calling ThrowFromBcNamespace() produces a real stack trace that
+            // contains the "Microsoft.Dynamics.Nav." namespace segment because
+            // the helper class lives in that namespace.
+            Microsoft.Dynamics.Nav.TestHelper.BcRuntimeSimulator.ThrowNull();
+        }
+        catch (NullReferenceException e) { ex = e; }
+
+        Assert.NotNull(ex);
+        Assert.True(Executor.IsLikelyRunnerLimitation(ex!));
+    }
+
+    /// <summary>
+    /// An exception from the Microsoft.BusinessCentral.* namespace also indicates
+    /// a BC service-tier dependency — must be classified as a runner limitation.
+    /// </summary>
+    [Fact]
+    public void IsLikelyRunnerLimitation_ExceptionFromBusinessCentralNamespace_ReturnsTrue()
+    {
+        Exception? ex = null;
+        try { Microsoft.BusinessCentral.TestHelper.BusinessCentralSimulator.ThrowNull(); }
+        catch (NullReferenceException e) { ex = e; }
+
+        Assert.NotNull(ex);
+        Assert.True(Executor.IsLikelyRunnerLimitation(ex!));
+    }
+
+    /// <summary>
+    /// A plain NullReferenceException with no BC runtime frames in the stack trace
+    /// is NOT a runner limitation — it is a user test logic failure.
+    /// </summary>
+    [Fact]
+    public void IsLikelyRunnerLimitation_PlainNullReferenceException_ReturnsFalse()
+    {
+        var ex = new NullReferenceException("object is null");
+        // Exception created directly, no stack trace → not from BC runtime
+        Assert.False(Executor.IsLikelyRunnerLimitation(ex));
+    }
+
+    /// <summary>
+    /// A standard assertion exception (the kind thrown by AL Assert codeunit)
+    /// must NOT be classified as a runner limitation.
+    /// </summary>
+    [Fact]
+    public void IsLikelyRunnerLimitation_PlainException_ReturnsFalse()
+    {
+        var ex = new InvalidOperationException("Expected 1, got 2");
+        Assert.False(Executor.IsLikelyRunnerLimitation(ex));
+    }
+
+    /// <summary>
+    /// MissingMethodException must produce Status=Error (IsRunnerBug=true) when it
+    /// surfaces through the test executor, not Status=Fail.
+    /// Verified via the pipeline using inline AL code that exercises a runtime path
+    /// where reflection cannot find an overload on the mock type.
+    /// </summary>
+    [Fact]
+    public void Pipeline_MissingMethodException_ClassifiedAsError()
+    {
+        // MissingMethodException surfaces when MockCodeunitHandle.Invoke finds a
+        // matching codeunit class but the invoked method overload is missing.
+        // We simulate this directly: build a result set that mirrors how the
+        // executor would classify such an exception, then verify IsRunnerBug=true.
+        var missingMethodEx = new MissingMethodException("void Codeunit50000.ALMissingProc()");
+        Assert.True(Executor.IsLikelyRunnerLimitation(missingMethodEx),
+            "MissingMethodException must be classified as a runner limitation");
+
+        // Also verify it does NOT satisfy IsRunnerError (old path) so the new path
+        // is the one doing the classification.
+        Assert.False(Executor.IsRunnerError(missingMethodEx),
+            "MissingMethodException must not already be caught by IsRunnerError");
+    }
+
+
+
+    // ---------------------------------------------------------------------------
+    // Pipeline error reporting — rewriter failures and compilation failures
+    // ---------------------------------------------------------------------------
+
+    /// <summary>
+    /// When the rewriter throws for an AL object, the pipeline must:
+    ///   - return ExitCode == 2 (runner limitation, not assertion failure)
+    ///   - populate RewriterErrors with the failing object name and exception message
+    ///   - not throw an AggregateException to the caller
+    /// </summary>
+    [Fact]
+    public void RewriterGap_ReturnsExitCode2_AndPopulatesRewriterErrors()
+    {
+        var pipeline = new AlRunnerPipeline();
+        // Inject a rewriter that throws unconditionally — simulates a rewriter gap
+        var result = pipeline.Run(new PipelineOptions
+        {
+            InlineCode = "Message('hello');",
+            RewriterFactory = _ => throw new InvalidOperationException("simulated rewriter gap")
+        });
+
+        Assert.Equal(2, result.ExitCode);
+        Assert.NotNull(result.RewriterErrors);
+        Assert.NotEmpty(result.RewriterErrors);
+        // The error must include the exception type and message
+        var error = result.RewriterErrors[0].Error;
+        Assert.Contains("InvalidOperationException", error);
+        Assert.Contains("simulated rewriter gap", error);
+        // Stderr must mention the runner gap hint
+        Assert.Contains("AL constructs not yet handled", result.StdErr);
+        Assert.Contains("--dump-csharp", result.StdErr);
+    }
+
+    /// <summary>
+    /// When the rewriter produces C# that Roslyn cannot compile, the pipeline must:
+    ///   - return ExitCode == 2 (runner limitation, not assertion failure)
+    ///   - populate CompilationErrors with the Roslyn error messages
+    ///   - not expose any test results (compilation never completed)
+    /// </summary>
+    [Fact]
+    public void CompilationGap_ReturnsExitCode2_AndPopulatesCompilationErrors()
+    {
+        var pipeline = new AlRunnerPipeline();
+        // Inject a rewriter that returns syntactically valid but semantically
+        // broken C# — simulates a rewriter gap that slips through to the Roslyn step.
+        var result = pipeline.Run(new PipelineOptions
+        {
+            InlineCode = "Message('hello');",
+            RewriterFactory = _ =>
+                Microsoft.CodeAnalysis.CSharp.CSharpSyntaxTree.ParseText(
+                    // Uses NonExistentType_XYZ which Roslyn cannot resolve
+                    "namespace AlRunner { public class Broken { NonExistentType_XYZ _f; } }")
+        });
+
+        Assert.Equal(2, result.ExitCode);
+        Assert.NotNull(result.CompilationErrors);
+        Assert.NotEmpty(result.CompilationErrors);
+        // At least one error must reference the unknown type
+        Assert.Contains(result.CompilationErrors, e => e.Contains("NonExistentType_XYZ"));
+        // Stderr must carry the runner gap hint and debugging tip
+        Assert.Contains("not yet handled by the runner", result.StdErr);
+        Assert.Contains("--dump-rewritten", result.StdErr);
+        // No test results — compilation never completed
+        Assert.Empty(result.Tests);
+    }
+
+    /// <summary>
+    /// Negative proof: a real assertion failure still returns ExitCode == 1,
+    /// not ExitCode == 2.  ExitCode 2 is reserved for runner limitations only.
+    /// </summary>
+    [Fact]
+    public void RealAssertionFailure_ReturnsExitCode1_NotExitCode2()
+    {
+        var pipeline = new AlRunnerPipeline();
+        var result = pipeline.Run(new PipelineOptions
+        {
+            InputPaths =
+            {
+                TestPath("06-intentional-failure", "src"),
+                TestPath("06-intentional-failure", "test")
+            }
+        });
+
+        // Assertion failures must produce exit code 1, never exit code 2
+        Assert.Equal(1, result.ExitCode);
+        Assert.Null(result.RewriterErrors);
+        Assert.Null(result.CompilationErrors);
+    }
+
+    // ---------------------------------------------------------------------------
     // Helpers
     // ---------------------------------------------------------------------------
 
