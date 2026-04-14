@@ -6,6 +6,8 @@ All notable changes to this project are documented here. Format based on
 
 ## [Unreleased]
 
+## [1.0.14] - 2026-04-14
+
 ### Added
 - **Report `CurrReport.Skip()` and `CurrReport.Break()` support** — Report
   classes now include `Skip()` and `Break()` method stubs injected by the
