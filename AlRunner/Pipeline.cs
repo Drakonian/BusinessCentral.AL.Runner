@@ -297,7 +297,7 @@ public class AlRunnerPipeline
             Log.Info($"Loading {stubFiles.Count} stub files from {stubPath}");
             foreach (var sf in stubFiles)
             {
-                var text = File.ReadAllText(sf);
+                var text = PrepareSourceForStandalone(File.ReadAllText(sf));
                 stubSources.Add(text);
                 StubIndex.Record(sf, text);
                 Runtime.EnumRegistry.ParseAndRegister(text);
@@ -723,8 +723,9 @@ public class AlRunnerPipeline
                 var groupSources = new List<string>();
                 foreach (var (name, source) in extracted)
                 {
-                    alSources.Add(source);
-                    groupSources.Add(source);
+                    var prepared = PrepareSourceForStandalone(source);
+                    alSources.Add(prepared);
+                    groupSources.Add(prepared);
                 }
                 var fullPath = Path.GetFullPath(depPath);
                 inputPaths.Add(fullPath);

@@ -106,13 +106,10 @@ public class MockReportHandle
         if (reportType == null)
             return null;
 
-        // Skip the generated constructor (may reference BC runtime infrastructure).
-        // InitializeComponent handles field wiring. Risk: field initializers outside
-        // InitializeComponent will be null/default.
-        _reportInstance = System.Runtime.CompilerServices.RuntimeHelpers.GetUninitializedObject(reportType);
-        var initMethod = reportType.GetMethod("InitializeComponent",
-            BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance);
-        initMethod?.Invoke(_reportInstance, null);
+        // The rewriter strips BC-infrastructure constructors and leaves a safe
+        // default .ctor(), so Activator.CreateInstance runs field initializers
+        // correctly (unlike GetUninitializedObject which skips them entirely).
+        _reportInstance = Activator.CreateInstance(reportType);
 
         if (_tableView != null)
         {
