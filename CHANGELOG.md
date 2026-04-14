@@ -4,7 +4,7 @@ All notable changes to this project are documented here. Format based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioning follows
 [SemVer](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.0.13] - 2026-04-14
 
 ### Added
 - **Event subscriber parameter forwarding** — Publisher event arguments (`ByRef<T>`
