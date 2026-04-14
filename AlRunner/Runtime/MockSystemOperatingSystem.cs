@@ -28,4 +28,9 @@ public static class MockSystemOperatingSystem
     /// In standalone mode there is no client surface, so this always returns false.
     /// </summary>
     public static bool ALGuiAllowed => false;
+
+    public static string ALGetUrl(object clientType, string company, object objectType, int objectId, object record, bool useFilters = false)
+    {
+        return $"/mock/{objectType}/{objectId}";
+    }
 }

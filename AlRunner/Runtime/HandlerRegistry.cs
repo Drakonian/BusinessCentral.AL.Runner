@@ -30,6 +30,9 @@ public static class HandlerRegistry
     // Registered modal page handler: method that takes (MockTestPageHandle testPage)
     private static MethodInfo? _modalPageHandler;
 
+    // Registered request page handler: method that takes (MockTestPageHandle testPage)
+    private static MethodInfo? _requestPageHandler;
+
     /// <summary>
     /// Register handlers for the current test. Called by the Executor before each test.
     /// </summary>
@@ -70,6 +73,8 @@ public static class HandlerRegistry
                         _messageHandler = method;
                     else if (handlerTypeName == "ModalPage")
                         _modalPageHandler = method;
+                    else if (handlerTypeName == "RequestPage" || handlerTypeName == "Page")
+                        _requestPageHandler = method;
                 }
             }
         }
@@ -186,6 +191,31 @@ public static class HandlerRegistry
     }
 
     /// <summary>
+    /// Invoke the registered request page handler for the given report/page ID.
+    /// Falls back to the modal page handler because BC represents both through
+    /// TestPage-like handler parameters after rewriting.
+    /// </summary>
+    public static void InvokeRequestPageHandler(int pageId)
+    {
+        var handler = _requestPageHandler ?? _modalPageHandler;
+        if (handler == null || _parentInstance == null)
+            throw new Exception($"No RequestPageHandler registered for report/page {pageId}. " +
+                "Add [HandlerFunctions('YourHandler')] to the test and a " +
+                "[RequestPageHandler] or [ModalPageHandler] procedure.");
+
+        var testPage = new MockTestPageHandle(pageId);
+
+        try
+        {
+            handler.Invoke(_parentInstance, new object[] { testPage });
+        }
+        catch (TargetInvocationException tie) when (tie.InnerException != null)
+        {
+            throw tie.InnerException;
+        }
+    }
+
+    /// <summary>
     /// Check if a confirm handler is registered.
     /// </summary>
     public static bool HasConfirmHandler => _confirmHandler != null;
@@ -209,5 +239,6 @@ public static class HandlerRegistry
         _confirmHandler = null;
         _messageHandler = null;
         _modalPageHandler = null;
+        _requestPageHandler = null;
     }
 }

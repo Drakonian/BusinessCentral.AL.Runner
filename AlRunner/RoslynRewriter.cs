@@ -248,18 +248,77 @@ public class RoslynRewriter : CSharpSyntaxRewriter
             return stubClass;
         }
 
+        // Report / ReportExtension generated classes pull in BC runtime types and
+        // layout infrastructure that do not exist in standalone mode. Keep the type
+        // shape and generated helper-procedure dispatch members, but strip BC-only
+        // inheritance and unsupported runtime/layout members.
+        if (node.BaseList != null && node.BaseList.Types.Any(
+                t => t.Type.ToString() is "NavReport" or "NavReportExtension"
+                    or "RequestPageBase" or "NavRequestPageExtension"))
+        {
+            var preservedMembers = new List<MemberDeclarationSyntax>();
+
+            foreach (var member in node.Members)
+            {
+                // Skip constructors — they call base() which no longer exists.
+                if (member is ConstructorDeclarationSyntax)
+                    continue;
+
+                if (member is MethodDeclarationSyntax method)
+                {
+                    // Skip override methods (OnClear, OnInvoke, OnMetadataLoaded) —
+                    // they reference base class infrastructure we removed.
+                    if (method.Modifiers.Any(SyntaxKind.OverrideKeyword))
+                        continue;
+                    // Skip InitializeComponent — references BC fields/properties
+                    // (BeginInitialization, Add, EndInitialization, RequestOptionsPage).
+                    if (method.Identifier.Text == "InitializeComponent")
+                        continue;
+                    // Skip __Construct factory methods — they call removed constructors.
+                    if (method.Identifier.Text == "__Construct")
+                        continue;
+
+                    if (Visit(method) is MemberDeclarationSyntax visitedMethod)
+                        preservedMembers.Add(visitedMethod);
+                }
+                else if (member is ClassDeclarationSyntax
+                    or StructDeclarationSyntax
+                    or InterfaceDeclarationSyntax
+                    or EnumDeclarationSyntax
+                    or DelegateDeclarationSyntax)
+                {
+                    if (Visit(member) is MemberDeclarationSyntax visitedMember)
+                        preservedMembers.Add(visitedMember);
+                }
+            }
+
+            preservedMembers.Insert(0,
+                SyntaxFactory.ParseMemberDeclaration(
+                    $"public {node.Identifier.Text}() {{ }}")!);
+
+            var stubClass = node
+                .WithBaseList(null)
+                .WithMembers(SyntaxFactory.List(preservedMembers))
+                .WithAttributeLists(SyntaxFactory.List<AttributeListSyntax>());
+            return stubClass;
+        }
+
         // Detect if this is a scope class BEFORE visiting children.
         // We need to know the enclosing class name for _parent field type.
         bool isScopeClass = false;
         bool isRecordClass = false;
         bool isPageExtensionClass = false;
         bool isPageClass = false;
+        bool isCodeunitClass = false;
         string? enclosingClassName = null;
         if (node.BaseList != null)
         {
             foreach (var baseType in node.BaseList.Types)
             {
                 var typeText = baseType.Type.ToString();
+                if (typeText == "NavCodeunit" || typeText == "NavTestCodeunit"
+                    || typeText == "NavUpgradeCodeunit" || typeText == "NavTestRunnerCodeUnit")
+                    isCodeunitClass = true;
                 if (typeText == "NavRecord" || typeText == "NavRecordExtension")
                     isRecordClass = true;
                 if (typeText == "NavFormExtension")
@@ -298,7 +357,7 @@ public class RoslynRewriter : CSharpSyntaxRewriter
             {
                 var typeText = baseType.Type.ToString();
 
-                if (typeText == "NavCodeunit" || typeText == "NavTestCodeunit" || typeText == "NavRecord"
+                if (typeText == "NavCodeunit" || typeText == "NavTestCodeunit" || typeText == "NavTestRunnerCodeUnit" || typeText == "NavRecord"
                     || typeText == "NavFormExtension" || typeText == "NavRecordExtension"
                     || typeText == "NavEventScope" || typeText == "NavUpgradeCodeunit"
                     || typeText == "NavForm")
@@ -416,6 +475,7 @@ public void ALSetAutoCalcFields(params object[] fields) => Rec.ALSetAutoCalcFiel
 public string ALGetFilter() => Rec.ALGetFilter();
 public string ALGetFilter(int fieldNo) => Rec.ALGetFilter(fieldNo);
 public void ALAssign(MockRecordHandle other) => Rec.ALAssign(other);
+public void ClearFieldValue(int fieldNo) => Rec.ClearFieldValue(fieldNo);
 public int ALFilterGroup { get => Rec.ALFilterGroup; set => Rec.ALFilterGroup = value; }
 public object ALReadIsolation { get => Rec.ALReadIsolation; set => Rec.ALReadIsolation = value; }
 public void Clear() => Rec.Clear();
@@ -426,6 +486,9 @@ public int CurrFieldNo { get; set; }
 public string ALGetFilters() => Rec.ALGetFilters();
 public NavValue ALGetRangeMinSafe(int fieldNo, NavType expectedType) => Rec.ALGetRangeMinSafe(fieldNo, expectedType);
 public NavValue ALGetRangeMaxSafe(int fieldNo, NavType expectedType) => Rec.ALGetRangeMaxSafe(fieldNo, expectedType);
+protected bool CallGetDecimalPlacesExtensionMethod(int fieldNo, ref string result) { return false; }
+protected bool CallGetTableRelationExtensionMethod(int fieldNo, MockRecordHandle rec, ref bool result) { return false; }
+protected bool CallGetFormatExtensionMethod(int fieldNo, ref string result) { return false; }
 ";
             var delegatingMembers = CSharpSyntaxTree.ParseText(
                 $"class _Temp_ {{ {delegatingCode} }}").GetRoot()
@@ -461,6 +524,11 @@ public void Close() { }
 public void Activate() { }
 public void SaveRecord() { }
 public void SetTableView(MockRecordHandle rec) { }
+// SetSelectionFilter: In real BC, this applies the UI-selection filter from a
+// temporary recordset. In standalone mode we approximate by copying the page's
+// Rec and applying its record filter — sufficient for compilation but not
+// semantically identical to the real multi-selection behaviour.
+public void SetSelectionFilter(MockRecordHandle rec) { rec.ALCopy(this.Rec, true); rec.ALSetRecFilter(); }
 protected bool CallGetDecimalPlacesExtensionMethod(int fieldNo, ref string result) { return false; }
 protected bool CallGetTableRelationExtensionMethod(int fieldNo, MockRecordHandle rec, ref bool result) { return false; }
 protected bool CallGetFormatExtensionMethod(int fieldNo, ref string result) { return false; }
@@ -469,6 +537,17 @@ protected bool CallGetFormatExtensionMethod(int fieldNo, ref string result) { re
                 $"class _Temp_ {{ {pageMemberCode} }}").GetRoot()
                 .DescendantNodes().OfType<ClassDeclarationSyntax>().First().Members;
             visited = visited.WithMembers(visited.Members.AddRange(pageMembers));
+        }
+
+        if (isCodeunitClass)
+        {
+            var codeunitMemberCode = @"
+public void ClearApplicationMemberVariables() { }
+";
+            var codeunitMembers = CSharpSyntaxTree.ParseText(
+                $"class _Temp_ {{ {codeunitMemberCode} }}").GetRoot()
+                .DescendantNodes().OfType<ClassDeclarationSyntax>().First().Members;
+            visited = visited.WithMembers(visited.Members.AddRange(codeunitMembers));
         }
 
         // Restore previous class name context
@@ -563,6 +642,13 @@ protected bool CallGetFormatExtensionMethod(int fieldNo, ref string result) { re
             if (name == "IsSingleInstance")
                 return true;
 
+            // TestRunner metadata overrides are only meaningful on BC's
+            // NavTestRunnerCodeUnit base, which we remove in standalone mode.
+            if (name == "OnTestRunMethodsHaveTestPermissionsParameter"
+                || name == "CommitTestCodeunits"
+                || name == "CommitTestFunctions")
+                return true;
+
             // Rec/xRec: Don't remove — rewrite to MockRecordHandle stub in VisitPropertyDeclaration
             // (removed the deletion that was here)
 
@@ -630,7 +716,7 @@ protected bool CallGetFormatExtensionMethod(int fieldNo, ref string result) { re
                 bool hadRemovedBase = parentClass.BaseList.Types.Any(t =>
                 {
                     var txt = t.Type.ToString();
-                    return txt == "NavCodeunit" || txt == "NavTestCodeunit" || txt == "NavRecord"
+                    return txt == "NavCodeunit" || txt == "NavTestCodeunit" || txt == "NavTestRunnerCodeUnit" || txt == "NavRecord"
                         || txt == "NavFormExtension" || txt == "NavRecordExtension"
                         || txt == "NavEventScope" || txt == "NavUpgradeCodeunit"
                         || txt == "NavForm";
@@ -819,6 +905,12 @@ protected bool CallGetFormatExtensionMethod(int fieldNo, ref string result) { re
         // need an ITreeObject and a real NavForm which standalone mode lacks.
         if (text == "NavFormHandle")
             return node.WithIdentifier(SyntaxFactory.Identifier("MockFormHandle"));
+
+        // NavReportHandle -> MockReportHandle
+        // Report variables use a handle wrapper for helper procedures, SetTableView,
+        // Run, and RunRequestPage. The standalone runner provides a reflection-based mock.
+        if (text == "NavReportHandle")
+            return node.WithIdentifier(SyntaxFactory.Identifier("MockReportHandle"));
 
         // NavTestPageHandle -> MockTestPageHandle
         // BC emits `TestPage "X"` AL variables as `NavTestPageHandle tP` fields with
@@ -1054,6 +1146,22 @@ protected bool CallGetFormatExtensionMethod(int fieldNo, ref string result) { re
         // new MockTestPageHandle(this, pageId) -> new MockTestPageHandle(pageId)
         // Same pattern as MockFormHandle: strip ITreeObject 'this', keep page ID.
         if (typeText == "MockTestPageHandle" && visited.ArgumentList != null)
+        {
+            if (visited.ArgumentList.Arguments.Count == 2)
+            {
+                return visited.WithArgumentList(
+                    SyntaxFactory.ArgumentList(
+                        SyntaxFactory.SingletonSeparatedList(visited.ArgumentList.Arguments[1])));
+            }
+            if (visited.ArgumentList.Arguments.Count == 1)
+            {
+                return visited.WithArgumentList(SyntaxFactory.ArgumentList());
+            }
+        }
+
+        // new MockReportHandle(this, reportId) -> new MockReportHandle(reportId)
+        // Same shape as page/test-page handles: strip ITreeObject parent, keep report ID.
+        if (typeText == "MockReportHandle" && visited.ArgumentList != null)
         {
             if (visited.ArgumentList.Arguments.Count == 2)
             {
@@ -2055,6 +2163,51 @@ protected bool CallGetFormatExtensionMethod(int fieldNo, ref string result) { re
                         SyntaxKind.SimpleMemberAccessExpression,
                         SyntaxFactory.IdentifierName("MockStream"),
                         SyntaxFactory.IdentifierName("ALCopyStream")));
+            }
+
+            // ALSystemVariable.Clear(x) -> x.Clear()
+            // In this project the only surviving pattern is RecordRef.Clear,
+            // which no longer matches BC's NavComplexValue overloads after
+            // NavRecordRef has been rewritten to MockRecordRef.
+            if (exprText == "ALSystemVariable" && methodName == "Clear" &&
+                visited.ArgumentList.Arguments.Count == 1)
+            {
+                return SyntaxFactory.InvocationExpression(
+                    SyntaxFactory.MemberAccessExpression(
+                        SyntaxKind.SimpleMemberAccessExpression,
+                        visited.ArgumentList.Arguments[0].Expression,
+                        SyntaxFactory.IdentifierName("Clear")),
+                    SyntaxFactory.ArgumentList());
+            }
+
+            // NavFile.ALUploadIntoStream(...) -> MockFile.ALUploadIntoStream(...)
+            // The BC runtime method expects ByRef<NavInStream>; after rewriting
+            // the argument is ByRef<MockInStream>, so redirect to a mock helper.
+            if (exprText == "NavFile" && methodName == "ALUploadIntoStream")
+            {
+                return visited.WithExpression(
+                    SyntaxFactory.MemberAccessExpression(
+                        SyntaxKind.SimpleMemberAccessExpression,
+                        SyntaxFactory.IdentifierName("MockFile"),
+                        SyntaxFactory.IdentifierName("ALUploadIntoStream")));
+            }
+
+            // ALCompiler.ObjectToNavArray<T>(x) -> AlCompat.ObjectToMockArray<T>(x)
+            if (exprText == "ALCompiler" && methodName == "ObjectToNavArray")
+            {
+                SimpleNameSyntax newName = SyntaxFactory.IdentifierName("ObjectToMockArray");
+                if (memberAccess.Name is GenericNameSyntax genericName)
+                {
+                    newName = SyntaxFactory.GenericName(
+                        SyntaxFactory.Identifier("ObjectToMockArray"),
+                        genericName.TypeArgumentList);
+                }
+
+                return visited.WithExpression(
+                    SyntaxFactory.MemberAccessExpression(
+                        SyntaxKind.SimpleMemberAccessExpression,
+                        SyntaxFactory.IdentifierName("AlCompat"),
+                        newName));
             }
 
             // ALSystemErrorHandling.ALClearLastError() -> AlScope.LastErrorText = ""

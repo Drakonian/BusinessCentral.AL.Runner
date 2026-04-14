@@ -172,11 +172,11 @@ public class MockRecordRef
         return moved;
     }
 
-    /// <summary>ALGetView — returns a filter-view string (stub: returns empty string).</summary>
-    public string ALGetView() => string.Empty;
+    /// <summary>ALGetView — delegates to the underlying record handle's view text.</summary>
+    public string ALGetView() => _handle?.ALGetView() ?? string.Empty;
 
     /// <summary>ALSetView — applies a filter-view string (stub: no-op; view strings require full BC parser).</summary>
-    public void ALSetView(string view) { /* no-op in mock */ }
+    public void ALSetView(string view) => _handle?.ALSetView(view);
 
     // -- Insert / Modify / Delete --
 
@@ -238,6 +238,12 @@ public class MockRecordRef
     public bool ALGet(DataError errorLevel, params NavValue[] keyValues)
         => _handle != null && _handle.ALGet(errorLevel, keyValues);
 
+    public bool ALGetBySystemId(DataError errorLevel, Guid systemId)
+        => _handle != null && _handle.ALGetBySystemId(errorLevel, systemId);
+
+    public bool ALGetBySystemId(Guid systemId)
+        => _handle != null && _handle.ALGetBySystemId(systemId);
+
     // -- SetTable / GetTable --
     // These copy field data between a typed Record variable and the RecordRef.
     // In the BC compiler output, these appear as:
@@ -294,6 +300,7 @@ public class MockRecordRef
 
     // -- LockTable (no-op) --
     public void ALLockTable(DataError errorLevel = DataError.ThrowError) { }
+    public void ALSetRecFilter() => _handle?.ALSetRecFilter();
 
     // -- Mark / MarkedOnly (stubs) --
     public void ALMark(bool mark) { }
@@ -305,6 +312,8 @@ public class MockRecordRef
 
     // -- IsTemporary --
     public bool ALIsTemporary => false;
+    public int ALSystemIdNo => 2000000000;
+    public int ALSystemModifiedAtNo => 2000000003;
 
     // -- ReadIsolation (no-op in standalone mode) --
     /// <summary>

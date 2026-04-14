@@ -463,6 +463,8 @@ public static class AlCompat
     public static decimal ObjectToDecimal(object? value)
     {
         if (value == null) return 0m;
+        var extracted = ExtractDecimal(value);
+        if (extracted.HasValue) return extracted.Value;
         return Convert.ToDecimal(value);
     }
 
@@ -484,6 +486,54 @@ public static class AlCompat
     {
         if (value is MockVariant mv) return mv;
         return new MockVariant(value ?? "");
+    }
+
+    /// <summary>
+    /// Replacement for ALCompiler.ObjectToNavArray.
+    /// Converts a runtime object into the rewritten MockArray shape.
+    /// </summary>
+    public static MockArray<T> ObjectToMockArray<T>(object? value)
+    {
+        if (value is MockArray<T> mockArray)
+            return mockArray;
+
+        if (value is IEnumerable<T> enumerable)
+        {
+            var items = enumerable.ToArray();
+            var result = new MockArray<T>(default!, items.Length);
+            for (int i = 0; i < items.Length; i++)
+                result[i] = items[i];
+            return result;
+        }
+
+        if (value != null && value.GetType().IsGenericType &&
+            value.GetType().Name.StartsWith("NavArray", StringComparison.Ordinal))
+        {
+            try
+            {
+                var arrayLen = value.GetType().GetMethod("ArrayLen", Type.EmptyTypes);
+                var indexer = value.GetType().GetProperty("Item", new[] { typeof(int) });
+                var length = arrayLen != null ? Convert.ToInt32(arrayLen.Invoke(value, null)) : 0;
+                var result = new MockArray<T>(default!, length);
+                if (indexer != null)
+                {
+                    for (int i = 0; i < length; i++)
+                    {
+                        var item = indexer.GetValue(value, new object[] { i });
+                        if (item is T typedItem)
+                            result[i] = typedItem;
+                    }
+                }
+                return result;
+            }
+            catch (Exception)
+            {
+                // NavArray reflection failed (type mismatch, missing method, etc.)
+                // — fall through to empty default array.
+            }
+        }
+
+        return new MockArray<T>(default!, 8);
     }
 
     /// <summary>

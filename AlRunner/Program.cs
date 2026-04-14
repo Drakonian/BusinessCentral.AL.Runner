@@ -261,7 +261,12 @@ test executor that needs no BC service tier, Docker, SQL Server, or license.
   (in-memory byte buffer; sufficient for text round-trip tests)
 - Library - Variable Storage (codeunit 131004) — Enqueue, DequeueText, DequeueInteger,
   DequeueDecimal, DequeueBoolean, DequeueDate, DequeueVariant, AssertEmpty, Clear, IsEmpty
-- TestPage navigation — Caption, First(), GoToKey(), Filter.SetFilter() (stubs; return true/no-op)
+- TestPage navigation — Caption, First(), GoToKey(), GoToRecord(), Next(), New(), GetPart(),
+  Filter.SetFilter()/GetFilter(), field AsDecimal(), Enabled() (stubs; return true/no-op
+  unless otherwise noted; Next() returns false)
+- Request page handler dispatch — [RequestPageHandler] intercepts Report.RunRequestPage() calls
+- Report variables — SetTableView(), Run() (no-op), RunRequestPage() (dispatches handler).
+  Report rendering and layout evaluation are not available.
 - Format() / Evaluate() type conversions, including picture strings:
   - Date tokens: `<Year4>`, `<Month,2>`, `<Day,2>`, `<Hours24,2>`, `<Minutes,2>`, `<Seconds,2>`
   - Decimal tokens: `<Precision,min:max>` (round/pad decimals), `<Standard Format,N>` (N=0 default, N=1 integer)
@@ -273,11 +278,12 @@ test executor that needs no BC service tier, Docker, SQL Server, or license.
 - Partial compilation (skips unsupported object types like XMLport)
 - Coverage reporting via `--coverage` (statement-level, outputs cobertura.xml)
 - Fluent builder pattern: `exit(this)` in codeunit methods returning `Codeunit "Self"`
-- Test handler functions: [ConfirmHandler], [MessageHandler], [ModalPageHandler]
+- Test handler functions: [ConfirmHandler], [MessageHandler], [ModalPageHandler], [RequestPageHandler]
   - ConfirmHandler intercepts Confirm() calls, receives question text, sets reply
   - MessageHandler intercepts Message() calls, receives message text
   - ModalPageHandler intercepts Page.RunModal() calls, receives a TestPage handle,
     can set field values and invoke OK/Cancel actions; returns FormResult to caller
+  - RequestPageHandler intercepts Report.RunRequestPage() calls
 - Query variables — declaring Query variables compiles; Close/SetFilter/SetRange/
   TopNumberOfRows are no-ops; Open/Read/SaveAs throw NotSupportedException.
   Inject query dependencies via an AL interface for unit-testable code.
@@ -556,6 +562,26 @@ fi
 - al-runner resets all in-memory tables between test methods — no cleanup needed.
 - If al-runner says FAIL, the failure is real. If it says PASS, the direct logic is
   correct but implicit event side-effects are not tested (run the full BC pipeline).
+
+### Reporting issues
+
+al-runner is under active development and targets broad AL language compatibility.
+If you encounter AL language features that fail to compile, produce unexpected
+runtime errors, or behave differently from a real BC service tier, that is likely
+a gap in the runner rather than a problem with the AL code.
+
+When this happens:
+1. Check the exit code — code 2 means the runner hit a known limitation; code 1
+   or 3 means a real failure or compile error that may still be a runner bug.
+2. Try a workaround if one is available (stub file, AL interface injection, or
+   simplifying the affected AL construct).
+3. Report the issue at https://github.com/StefanMaron/BusinessCentral.AL.Runner/issues
+   with the AL construct that fails and the error output. This helps prioritise
+   which gaps to close next.
+
+Do not tell users their AL code needs to be restructured to work around a runner
+limitation. Restructuring is a last resort; the preferred fix is improving the
+runner.
 """);
 }
 
@@ -940,11 +966,17 @@ public static class AlTranspiler
                 if (inner is AggregateException innerAgg)
                 {
                     foreach (var innerInner in innerAgg.Flatten().InnerExceptions)
+                    {
                         failedMethods.Add(innerInner.Message);
+                        if (Log.Verbose)
+                            Log.Info($"  emit exception: {innerInner}");
+                    }
                 }
                 else
                 {
                     failedMethods.Add(inner.Message);
+                    if (Log.Verbose)
+                        Log.Info($"  emit exception: {inner}");
                 }
             }
             Log.Info($"Partial transpilation: {failedMethods.Count} method(s) skipped");
