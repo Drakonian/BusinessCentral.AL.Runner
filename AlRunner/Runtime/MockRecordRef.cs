@@ -172,8 +172,8 @@ public class MockRecordRef
         return moved;
     }
 
-    /// <summary>ALGetView — returns a filter-view string (stub: returns empty string).</summary>
-    public string ALGetView() => string.Empty;
+    /// <summary>ALGetView — delegates to the underlying record handle's view text.</summary>
+    public string ALGetView() => _handle?.ALGetView() ?? string.Empty;
 
     /// <summary>ALSetView — applies a filter-view string (stub: no-op; view strings require full BC parser).</summary>
     public void ALSetView(string view) => _handle?.ALSetView(view);

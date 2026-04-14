@@ -825,7 +825,11 @@ public class AlRunnerPipeline
 
     private static string PrepareSourceForStandalone(string source)
     {
-        if (!Regex.IsMatch(source, @"^\s*report(extension)?\b", RegexOptions.IgnoreCase))
+        // Strip rendering blocks and DefaultRenderingLayout from any source that
+        // contains a report or reportextension declaration — not just when the
+        // declaration is at the very start. This handles BOM, header comments,
+        // multi-object files, and other common AL file layouts.
+        if (!Regex.IsMatch(source, @"\breport(extension)?\s+\d+", RegexOptions.IgnoreCase))
             return source;
 
         source = StripNamedBlock(source, "rendering");

@@ -282,7 +282,18 @@ public class MockRecordHandle
         }
 
         var row = new Dictionary<int, NavValue>(_fields);
+
+        // Auto-populate SystemId if not already set, so that ALGetBySystemId
+        // can find records inserted in standalone mode.
+        if (!row.ContainsKey(SystemIdFieldNo) || (row[SystemIdFieldNo] is NavGuid g && g.ToGuid() == Guid.Empty))
+            row[SystemIdFieldNo] = new NavGuid(Guid.NewGuid());
+
         table.Add(row);
+
+        // Copy the SystemId back into the handle's field bag so that
+        // reading Rec.SystemId after Insert() returns the generated value.
+        _fields[SystemIdFieldNo] = row[SystemIdFieldNo];
+
         return true;
     }
 

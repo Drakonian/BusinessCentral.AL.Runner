@@ -6,19 +6,24 @@ codeunit 93002 "GBS GetBySystemId Tests"
         Assert: Codeunit Assert;
 
     [Test]
-    procedure GetBySystemIdCompiles()
+    procedure GetBySystemIdFindsInsertedRecord()
     var
         Rec: Record "GBS Test Record";
+        LookupRec: Record "GBS Test Record";
+        RecordSystemId: Guid;
     begin
         // [GIVEN] A record inserted into the table
         Rec.Id := 1;
         Rec.Name := 'Alpha';
-        Rec.Insert(false);
+        Rec.Insert(true);
+        RecordSystemId := Rec.SystemId;
 
-        // [THEN] GetBySystemId compiles and runs without crash
-        // Note: SystemId is not populated in standalone mode without Insert(true),
-        // so we just verify the method exists and compiles
-        Assert.IsTrue(true, 'GetBySystemId should compile');
+        // [WHEN] GetBySystemId is called with the inserted record's SystemId
+        LookupRec.GetBySystemId(RecordSystemId);
+
+        // [THEN] The inserted record should be found
+        Assert.AreEqual(Rec.Id, LookupRec.Id, 'GetBySystemId should return the inserted record');
+        Assert.AreEqual(Rec.Name, LookupRec.Name, 'GetBySystemId should return the inserted record values');
     end;
 
     [Test]

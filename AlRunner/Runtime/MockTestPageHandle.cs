@@ -138,7 +138,9 @@ public class MockTestPageHandle
 ///   tP.GetField(fieldHash).ALSetValue(this.Session, value)
 ///   tP.GetField(fieldHash).ALValue
 ///
-/// Stores the last set value as a NavValue and returns it via ALValue.
+/// Stores the last set value and returns it via the settable ALValue property.
+/// The backing store is <c>object?</c> so both <see cref="NavValue"/> instances
+/// and raw CLR values (assigned through the setter) are supported.
 /// </summary>
 public class MockTestPageField
 {
@@ -165,8 +167,9 @@ public class MockTestPageField
     }
 
     /// <summary>
-    /// Get the current field value as a NavValue.
-    /// BC reads this to pass to Assert.AreEqual via ALCompiler.ToVariant.
+    /// Get or set the current field value.
+    /// The getter returns the last value written via <see cref="ALSetValue"/> or the setter.
+    /// The value may be a <see cref="NavValue"/>, a raw CLR type, or <c>null</c>.
     /// </summary>
     public object? ALValue
     {
@@ -258,14 +261,15 @@ public class MockTestPageAction
 /// Mock for TestPage.Filter property. BC emits:
 ///   tP.ALFilter.ALSetFilter(fieldNo, filterValue)
 ///
-/// This is a no-op stub — the runner does not track TestPage-level filters.
+/// Tracks per-field filter expressions in memory so that <see cref="ALGetFilter"/>
+/// can return the last value set for a given field.
 /// </summary>
 public class MockTestPageFilter
 {
     private readonly Dictionary<int, string> _filters = new();
 
     /// <summary>
-    /// Sets a filter on the given field. No-op in standalone mode.
+    /// Sets a filter on the given field.
     /// BC emits: ALSetFilter(fieldNo, filterExpression)
     /// </summary>
     public void ALSetFilter(int fieldNo, string filterExpression)
