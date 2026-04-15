@@ -1002,7 +1002,77 @@ public static class AlTranspiler
                     declErrors = declDiags
                         .Where(d => d.Severity == DiagnosticSeverity.Error && !ignoredErrorIds.Contains(d.Id))
                         .ToList();
+
                 }
+            }
+        }
+
+        // Case 3 (independent of packages): cross-extension collision on extension objects.
+        // When multiple extensions are compiled together in a single pass,
+        // independently-valid extension objects (pageextension, tableextension, etc.)
+        // with the same name from different extensions cause false AL0275/AL0197 errors.
+        // In production BC these compile independently and never collide. Since
+        // extension objects are never referenced by name in AL code, we suppress these.
+        //
+        // Two-pass approach: first collect extension-type AL0197 errors and group by
+        // object name to verify they reference 2+ different extensions (truly cross-
+        // extension), then suppress AL0275 only for those verified names.
+        // Same-extension duplicates (1 extension identity) are NOT suppressed.
+        // Non-extension types (Codeunit, Table, Page, etc.) are never suppressed.
+        {
+            // Pass 1: AL0197 — collect extension-type duplicates grouped by object name
+            var al0197ExtType = declErrors
+                .Where(d => d.Id == "AL0197")
+                .Where(d => DiagnosticClassifier.IsCrossExtensionDuplicateDeclaration(d.GetMessage()))
+                .ToList();
+
+            // Group by object name and collect declaring extension identities per name.
+            // Only names with 2+ different extension identities are truly cross-extension.
+            var nameToExtensions = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
+            foreach (var d in al0197ExtType)
+            {
+                var info = DiagnosticClassifier.ExtractDuplicateDeclarationInfo(d.GetMessage());
+                if (info is null) continue;
+                if (!nameToExtensions.TryGetValue(info.Value.ObjectName, out var extSet))
+                {
+                    extSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    nameToExtensions[info.Value.ObjectName] = extSet;
+                }
+                extSet.Add(info.Value.ExtensionId);
+            }
+
+            var crossExtNames = new HashSet<string>(
+                nameToExtensions.Where(kv => kv.Value.Count >= 2).Select(kv => kv.Key),
+                StringComparer.OrdinalIgnoreCase);
+
+            // Only suppress AL0197 errors whose object name is verified cross-extension
+            var al0197CrossExt = al0197ExtType
+                .Where(d =>
+                {
+                    var info = DiagnosticClassifier.ExtractDuplicateDeclarationInfo(d.GetMessage());
+                    return info != null && crossExtNames.Contains(info.Value.ObjectName);
+                })
+                .ToList();
+
+            // Pass 2: AL0275 — only suppress if the object name is a verified cross-extension name
+            var al0275CrossExt = declErrors
+                .Where(d => d.Id == "AL0275")
+                .Where(d =>
+                {
+                    var msg = d.GetMessage();
+                    if (!DiagnosticClassifier.IsCrossExtensionAmbiguity(msg)) return false;
+                    var name = DiagnosticClassifier.ExtractAmbiguousObjectName(msg);
+                    return name != null && crossExtNames.Contains(name);
+                })
+                .ToList();
+
+            var crossExtErrors = al0197CrossExt.Concat(al0275CrossExt).ToList();
+            if (crossExtErrors.Count > 0)
+            {
+                Log.Info($"Cross-extension name collisions suppressed ({crossExtErrors.Count} AL0275/AL0197 errors from different extensions compiled together).");
+                declErrors = declErrors
+                    .Where(d => !crossExtErrors.Contains(d))
+                    .ToList();
             }
         }
 

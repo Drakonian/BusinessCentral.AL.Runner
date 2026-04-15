@@ -414,4 +414,76 @@ namespace AlRunnerGenerated {
         Assert.True(result.CompilationErrors == null || result.CompilationErrors.Count == 0,
             "CompilationErrors should be null or empty on successful compilation");
     }
+
+    [Fact]
+    public void CrossExtension_SameNamePageExtensions_Suppressed()
+    {
+        // Two extensions (appA, appB) define a pageextension with the same name
+        // "ItemCardExt" — valid in production BC where extensions compile independently.
+        // The runner compiles them together and must suppress the false AL0275/AL0197.
+        var testCase = CliRunner.FindTestCase("130-cross-ext-al0275");
+        var pipeline = new AlRunnerPipeline();
+        var result = pipeline.Run(new PipelineOptions
+        {
+            InputPaths =
+            {
+                Path.Combine(testCase, "appA"),
+                Path.Combine(testCase, "appB"),
+                Path.Combine(testCase, "test")
+            }
+        });
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.True(result.Passed > 0, "Should have passing tests");
+        Assert.Equal(0, result.Failed);
+    }
+
+    [Fact]
+    public void CrossExtension_SameNameCodeunits_NotSuppressed()
+    {
+        // Two extensions define a codeunit with the same name "Shared Helper" —
+        // Codeunit is NOT an extension type, so the collision must NOT be suppressed.
+        // Verify the AL0197 error appears in verbose output (not silently eaten).
+        var testCase = CliRunner.FindTestCase("131-genuine-codeunit-collision");
+        var pipeline = new AlRunnerPipeline();
+        var result = pipeline.Run(new PipelineOptions
+        {
+            InputPaths =
+            {
+                Path.Combine(testCase, "appA"),
+                Path.Combine(testCase, "appB"),
+                Path.Combine(testCase, "test")
+            },
+            Verbose = true
+        });
+
+        // The AL0197 for Codeunit type must NOT be suppressed
+        Assert.DoesNotContain("Cross-extension name collisions suppressed", result.StdErr);
+        Assert.Contains("AL0197", result.StdErr);
+        Assert.Contains("Codeunit", result.StdErr);
+    }
+
+    [Fact]
+    public void SameExtension_DuplicatePageExtensionName_NotSuppressed()
+    {
+        // Same extension defines two pageextensions with the same name "DuplicatedExt"
+        // but different IDs. AL0197 fires with a single extension identity.
+        // The two-pass grouping requires 2+ identities, so this must NOT be suppressed.
+        var testCase = CliRunner.FindTestCase("135-same-ext-pageext-duplicate");
+        var pipeline = new AlRunnerPipeline();
+        var result = pipeline.Run(new PipelineOptions
+        {
+            InputPaths =
+            {
+                Path.Combine(testCase, "src"),
+                Path.Combine(testCase, "test")
+            },
+            Verbose = true
+        });
+
+        // AL0197 for same-extension duplicate must NOT be suppressed
+        Assert.DoesNotContain("Cross-extension name collisions suppressed", result.StdErr);
+        Assert.Contains("AL0197", result.StdErr);
+        Assert.Contains("PageExtension", result.StdErr);
+    }
 }
