@@ -271,12 +271,18 @@ test executor that needs no BC service tier, Docker, SQL Server, or license.
   RecRef := OtherRecRef assignment, SetLoadFields (no-op), Mark/MarkedOnly/ClearMarks
   (no-op stubs), Rename, FieldExists, FieldCount, HasFilter, GetFilters, GetPosition,
   SetPosition, Ascending, ChangeCompany (no-op), ModifyAll, CurrentCompany,
+  RecRef.Name (real table name from AL source metadata),
   SystemIdNo, SystemCreatedAtNo, SystemCreatedByNo, SystemModifiedAtNo,
   SystemModifiedByNo (return well-known BC system field numbers).
   FieldRef also supports: IsEnum, EnumValueCount(), GetEnumValueName(index),
   GetEnumValueCaption(index), GetEnumValueOrdinal(index) — enum introspection
   using registered enum metadata. CalcSum() — sums a decimal field across all
   filtered records; result is available via the next Value read.
+- Field metadata — Record.FieldCaption, Record.TableCaption, Record.TableName,
+  FieldRef.Name, FieldRef.Caption, FieldRef.Type, FieldRef.Length return real values
+  parsed from AL source table declarations (Caption property, field type, Text[N]/Code[N]
+  length). Captions with embedded apostrophes (e.g. 'Vendor''s Name') are unescaped.
+  Falls back to stub defaults for tables not parsed from source.
 - JSON types: JsonObject, JsonArray, JsonToken, JsonValue — Add, Get, Contains,
   Remove, Replace, Count, WriteTo, ReadFrom, SelectToken, AsValue, AsText, AsInteger, etc.
 - BLOB / InStream / OutStream — CreateInStream/CreateOutStream, HasValue, ReadText/WriteText

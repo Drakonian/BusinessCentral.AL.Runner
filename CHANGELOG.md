@@ -13,6 +13,15 @@ All notable changes to this project are documented here. Format based on
   (XmlPort) or "Record operations" (Query) as actionable alternatives. (#124)
 
 ### Added
+- **Field metadata infrastructure** — `TableFieldRegistry` now parses and stores
+  field-level metadata (name, caption, type, length) and table-level metadata
+  (name, caption) from AL source at transpile time. `MockRecordHandle.ALFieldCaption`,
+  `ALTableCaption`, `ALTableName` return real values from the registry (falling back
+  to stub defaults for unregistered tables). `MockFieldRef.ALName`, `ALCaption`,
+  `ALType`, `ALLength` use the registry. `MockRecordRef.ALName` and `ALFieldCount`
+  return schema-based values. `MockRecordHandle.FieldCount` returns the schema field
+  count when metadata is available. Caption values with embedded apostrophes
+  (e.g. `'Vendor''s Name'`) are unescaped correctly. (#114)
 - **Temporary records** — `Record "X" temporary` variables now use an isolated in-memory
   store per handle instance, fully separated from non-temporary records of the same table.
   `IsTemporary()` returns the correct value. `RecordRef.Open(tableId, true)` creates a
