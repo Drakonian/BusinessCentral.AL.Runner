@@ -7,6 +7,13 @@ All notable changes to this project are documented here. Format based on
 ## [Unreleased]
 
 ### Added
+- **ErrorInfo type & collectible errors** — `Error(ErrorInfo)` now uses
+  `ErrorInfo.Message` for the error text (previously used `.ToString()` which
+  included internal field metadata). Collectible errors are fully supported:
+  mark `ErrorInfo.Collectible := true` and annotate procedures with
+  `[ErrorBehavior(ErrorBehavior::Collect)]` to collect errors instead of
+  throwing. Global functions `HasCollectedErrors()`, `GetCollectedErrors()`,
+  `ClearCollectedErrors()`, and `IsCollectingErrors()` all work. (#117)
 - **MockNotification** — In-memory replacement for `NavNotification`. Message,
   Send, Recall, SetData/GetData/HasData, AddAction, Id, Scope. Send and Recall
   are no-ops; data store is in-memory; Id auto-generates a Guid. (#121)
