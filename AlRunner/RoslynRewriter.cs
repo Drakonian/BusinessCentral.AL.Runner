@@ -1,6 +1,7 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using System.Linq;
 
 // No namespace - must be accessible from Program.cs top-level statements
 
@@ -1736,6 +1737,35 @@ public void ClearApplicationMemberVariables() { }
                         SyntaxFactory.SingletonSeparatedList(
                             SyntaxFactory.Argument(enumIdArg))));
             }
+        }
+
+        // Special-case: `NCLEnumMetadata.Create(N).FromInteger(I)` → `AlCompat.EnumFromInteger(N, I)`
+        // BC emits this pattern for `Enum::"T".FromInteger(I)`. Must be intercepted before
+        // recursing so the inner NCLEnumMetadata.Create(N) is not erased by the generic rewrite.
+        // N is passed through as-is (same as GetEnumOrdinals/GetEnumNames); the runtime
+        // AlCompat.EnumFromInteger validates the ordinal against EnumRegistry.GetMembers(N).
+        if (node.ArgumentList.Arguments.Count == 1 &&
+            node.Expression is MemberAccessExpressionSyntax fiOuterMa &&
+            fiOuterMa.Name.Identifier.Text == "FromInteger" &&
+            fiOuterMa.Expression is InvocationExpressionSyntax fiInnerInv &&
+            fiInnerInv.Expression is MemberAccessExpressionSyntax fiInnerMa &&
+            fiInnerMa.Expression is IdentifierNameSyntax fiInnerIdent &&
+            fiInnerIdent.Identifier.Text == "NCLEnumMetadata" &&
+            fiInnerMa.Name.Identifier.Text == "Create" &&
+            fiInnerInv.ArgumentList.Arguments.Count == 1)
+        {
+            var enumIdArg = fiInnerInv.ArgumentList.Arguments[0].Expression;
+            var ordinalArg = (ExpressionSyntax)Visit(node.ArgumentList.Arguments[0].Expression)!;
+            return SyntaxFactory.InvocationExpression(
+                SyntaxFactory.MemberAccessExpression(
+                    SyntaxKind.SimpleMemberAccessExpression,
+                    SyntaxFactory.IdentifierName("AlCompat"),
+                    SyntaxFactory.IdentifierName("EnumFromInteger")),
+                SyntaxFactory.ArgumentList(SyntaxFactory.SeparatedList(new[]
+                {
+                    SyntaxFactory.Argument(enumIdArg),
+                    SyntaxFactory.Argument(ordinalArg)
+                })));
         }
 
         // Now recurse into children first

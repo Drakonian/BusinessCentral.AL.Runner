@@ -511,6 +511,32 @@ public static class AlCompat
     }
 
     /// <summary>
+    /// Implements <c>Enum::"T".FromInteger(I)</c> — validates <paramref name="ordinal"/>
+    /// against the declared members in <see cref="EnumRegistry"/> and returns a tagged
+    /// NavOption.  Throws if the ordinal is not declared.
+    /// Emitted by the rewriter for <c>NCLEnumMetadata.Create(N).FromInteger(I)</c>.
+    /// If the enum is not in the registry (e.g. an extensible/external enum), validation
+    /// is skipped (same fallback as <see cref="GetEnumOrdinals"/>).
+    /// </summary>
+    public static NavOption EnumFromInteger(int enumObjectId, int ordinal)
+    {
+        var members = EnumRegistry.GetMembers(enumObjectId);
+        if (members.Count > 0)
+        {
+            bool valid = false;
+            foreach (var (v, _) in members)
+                if (v == ordinal) { valid = true; break; }
+            if (!valid)
+                throw new Exception($"The value {ordinal} is not a valid ordinal for this enum type.");
+        }
+        return CreateTaggedOption(enumObjectId, ordinal);
+    }
+
+    /// <summary>Overload for Decimal18 — AL Integer variables are Decimal18 in BC's C# output.</summary>
+    public static NavOption EnumFromInteger(int enumObjectId, Decimal18 ordinal)
+        => EnumFromInteger(enumObjectId, (int)ordinal);
+
+    /// <summary>
     /// Create a NavOption that inherits the enum-id tag from an existing
     /// NavOption. Emitted by the rewriter for
     /// <c>NavOption.Create(existing.NavOptionMetadata, V)</c>
