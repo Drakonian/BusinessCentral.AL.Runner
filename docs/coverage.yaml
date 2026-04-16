@@ -5795,8 +5795,8 @@ System.ClearLastError:
 System.ClosingDate:
   layer: runtime-api
   category: System
-  status: gap
-  notes: overloads=1
+  status: covered
+  notes: overloads=1; AlCompat.ClosingDate wraps ALSystemDate.ALClosingDate; tested in 177-system-enc-date
 
 System.CodeCoverageInclude:
   layer: runtime-api
@@ -5849,8 +5849,8 @@ System.CreateDateTime:
 System.CreateEncryptionKey:
   layer: runtime-api
   category: System
-  status: gap
-  notes: overloads=1
+  status: covered
+  notes: overloads=1; no-op stub in standalone runner; tested in 177-system-enc-date
 
 System.CreateGuid:
   layer: runtime-api
@@ -5881,26 +5881,26 @@ System.Date2DWY:
 System.DaTi2Variant:
   layer: runtime-api
   category: System
-  status: gap
-  notes: overloads=1
+  status: covered
+  notes: overloads=1; AlCompat.DaTi2Variant returns MockVariant(NavDateTime); tested in 177-system-enc-date
 
 System.Decrypt:
   layer: runtime-api
   category: System
-  status: gap
-  notes: overloads=1
+  status: covered
+  notes: overloads=1; stub returns plaintext unchanged (no key in runner); tested in 177-system-enc-date
 
 System.DeleteEncryptionKey:
   layer: runtime-api
   category: System
-  status: gap
-  notes: overloads=1
+  status: covered
+  notes: overloads=1; no-op stub; tested in 177-system-enc-date
 
 System.DMY2Date:
   layer: runtime-api
   category: System
-  status: gap
-  notes: overloads=1
+  status: covered
+  notes: overloads=1; AlCompat.DMY2Date wraps ALSystemDate.ALDMY2Date; tested in 177-system-enc-date
 
 System.DT2Date:
   layer: runtime-api
@@ -5917,26 +5917,26 @@ System.DT2Time:
 System.DWY2Date:
   layer: runtime-api
   category: System
-  status: gap
-  notes: overloads=1
+  status: covered
+  notes: overloads=1; AlCompat.DWY2Date wraps ALSystemDate.ALDWY2Date; tested in 177-system-enc-date
 
 System.Encrypt:
   layer: runtime-api
   category: System
-  status: gap
-  notes: overloads=1
+  status: covered
+  notes: overloads=1; stub returns plaintext unchanged; tested in 177-system-enc-date
 
 System.EncryptionEnabled:
   layer: runtime-api
   category: System
-  status: gap
-  notes: overloads=1
+  status: covered
+  notes: overloads=1; always false in standalone runner; tested in 177-system-enc-date
 
 System.EncryptionKeyExists:
   layer: runtime-api
   category: System
-  status: gap
-  notes: overloads=1
+  status: covered
+  notes: overloads=1; always false in standalone runner; tested in 177-system-enc-date
 
 System.Evaluate:
   layer: runtime-api
@@ -5949,8 +5949,8 @@ System.Evaluate:
 System.ExportEncryptionKey:
   layer: runtime-api
   category: System
-  status: gap
-  notes: overloads=1
+  status: covered
+  notes: overloads=1; no-op stub; tested in 177-system-enc-date
 
 System.ExportObjects:
   layer: runtime-api
@@ -6039,8 +6039,8 @@ System.Hyperlink:
 System.ImportEncryptionKey:
   layer: runtime-api
   category: System
-  status: gap
-  notes: overloads=1
+  status: covered
+  notes: overloads=1; no-op stub; tested in 177-system-enc-date
 
 System.ImportObjects:
   layer: runtime-api
@@ -6082,8 +6082,8 @@ System.IsServiceTier:
 System.NormalDate:
   layer: runtime-api
   category: System
-  status: gap
-  notes: overloads=1
+  status: covered
+  notes: overloads=1; AlCompat.NormalDate wraps ALSystemDate.ALNormalDate; tested in 177-system-enc-date
 
 System.Power:
   layer: runtime-api
@@ -6144,14 +6144,14 @@ System.Today:
 System.Variant2Date:
   layer: runtime-api
   category: System
-  status: gap
-  notes: overloads=1
+  status: covered
+  notes: overloads=1; AlCompat.Variant2Date unwraps MockVariant; tested in 177-system-enc-date
 
 System.Variant2Time:
   layer: runtime-api
   category: System
-  status: gap
-  notes: overloads=1
+  status: covered
+  notes: overloads=1; AlCompat.Variant2Time unwraps MockVariant; tested in 177-system-enc-date
 
 System.WindowsLanguage:
   layer: runtime-api
