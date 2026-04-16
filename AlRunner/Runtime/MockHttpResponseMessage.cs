@@ -46,4 +46,38 @@ public class MockHttpResponseMessage
 
     /// <summary>No-op Clear.</summary>
     public void Clear() { }
+
+    /// <summary>
+    /// BC emits: <c>response.ALIsBlockedByEnvironment</c> (property read)
+    /// for <c>HttpResponseMessage.IsBlockedByEnvironment()</c>.
+    /// Always false — environment blocking is not applicable in standalone mode.
+    /// </summary>
+    public bool ALIsBlockedByEnvironment => false;
+
+    /// <summary>
+    /// BC emits: <c>response.ALGetCookie(DataError, name, ByRef&lt;MockCookie&gt;)</c>
+    /// for <c>HttpResponseMessage.GetCookie(CookieName, var Cookie)</c>.
+    /// Always returns false — no cookies are stored in standalone mode.
+    /// </summary>
+    public bool ALGetCookie(DataError errorLevel, NavText cookieName, ByRef<MockCookie> cookie)
+    {
+        cookie.Value = new MockCookie();
+        return false;
+    }
+
+    /// <summary>
+    /// BC emits: <c>response.ALGetCookieNames(DataError)</c>
+    /// for <c>HttpResponseMessage.GetCookieNames()</c>.
+    /// Returns an empty list — no cookies in standalone mode.
+    /// </summary>
+    public NavList<NavText> ALGetCookieNames(DataError errorLevel)
+    {
+        return NavList<NavText>.Default;
+    }
+
+    /// <summary>Overload without DataError for caller convenience.</summary>
+    public NavList<NavText> ALGetCookieNames()
+    {
+        return NavList<NavText>.Default;
+    }
 }
