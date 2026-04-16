@@ -181,6 +181,29 @@ public static class MockJsonHelper
         }
     }
 
+    /// <summary>
+    /// Replacement for NavJsonToken.ALGetBoolean(key).
+    /// Returns the boolean value of the named property without going through
+    /// TrappableOperationExecutor or NavCurrentThread.Session.
+    /// AL: JsonObject.GetBoolean('key')  →  MockJsonHelper.GetBoolean(token, key)
+    /// Note: BC does not pass a DataError arg for typed JSON getters.
+    /// </summary>
+    public static bool GetBoolean(NavJsonToken token, string key)
+    {
+        var backingToken = GetBackingToken(token);
+        if (backingToken is not JObject obj)
+            throw new Exception("The JSON token is not an object.");
+
+        if (!obj.TryGetValue(key, out var val))
+            throw new Exception($"The JSON object does not contain a property with the name '{key}'.");
+
+        if (val.Type != JTokenType.Boolean)
+            throw new Exception(
+                $"The value of JSON property '{key}' cannot be converted to a Boolean value.");
+
+        return val.Value<bool>();
+    }
+
     private static bool IsSupportedTokenType(JToken token)
     {
         return token.Type switch
