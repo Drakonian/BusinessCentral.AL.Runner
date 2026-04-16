@@ -59,6 +59,19 @@ public static class TableFieldRegistry
     // (tableId, fieldNo) -> enum name (for fields declared as Enum "XYZ")
     private static readonly Dictionary<(int TableId, int FieldNo), string> _enumFields = new();
 
+    // (tableId, fieldNo) -> comma-separated option members (for inline Option fields with OptionMembers = A,B,C)
+    private static readonly Dictionary<(int TableId, int FieldNo), string> _optionMembersFields = new();
+
+    private static readonly Regex OptionMembersProp = new(
+        @"\bOptionMembers\s*=\s*([^;]+);",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    // Directly captures field ID and OptionMembers from Option field declarations.
+    // Matches: field(id; <name>; Option) { [^{}]* OptionMembers = <value>; }
+    private static readonly Regex OptionFieldMembersRx = new(
+        @"\bfield\s*\(\s*(\d+)\s*;[^;]+;\s*Option\s*\)\s*\{[^{}]*\bOptionMembers\s*=\s*([^;]+);",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
     public static void Clear()
     {
         _byTable.Clear();
@@ -66,6 +79,7 @@ public static class TableFieldRegistry
         _tableCaptions.Clear();
         _fieldMeta.Clear();
         _enumFields.Clear();
+        _optionMembersFields.Clear();
     }
 
     public static void ParseAndRegister(string alSource)
@@ -165,6 +179,15 @@ public static class TableFieldRegistry
                 _enumFields[(tableId, fieldId)] = enumName;
             }
 
+            // Extract OptionMembers for inline Option fields via a dedicated pass over the body.
+            // This is more reliable than using field body extraction and avoids edge cases
+            // with field body position tracking.
+            foreach (Match om in OptionFieldMembersRx.Matches(body))
+            {
+                if (!int.TryParse(om.Groups[1].Value, out var fieldId)) continue;
+                _optionMembersFields[(tableId, fieldId)] = om.Groups[2].Value.Trim();
+            }
+
             // Extract the first declared key (typically Clustered PK) and
             // register its field numbers so MockRecordHandle.ALInsert can
             // enforce uniqueness. BC's registration path only fires for
@@ -258,6 +281,12 @@ public static class TableFieldRegistry
     public static string? GetEnumName(int tableId, int fieldNo)
     {
         return _enumFields.TryGetValue((tableId, fieldNo), out var name) ? name : null;
+    }
+
+    /// <summary>Returns the comma-separated OptionMembers string for an inline Option field, or null.</summary>
+    public static string? GetOptionMembers(int tableId, int fieldNo)
+    {
+        return _optionMembersFields.TryGetValue((tableId, fieldNo), out var members) ? members : null;
     }
 
     private static string DecodeAlSingleQuotedString(string value)
