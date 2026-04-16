@@ -1725,7 +1725,7 @@ Database.SetUserPassword:
 Database.SID:
   layer: runtime-api
   category: Database
-  status: gap
+  status: covered
   notes: overloads=1
 
 Database.TenantId:
