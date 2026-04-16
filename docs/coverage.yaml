@@ -2381,7 +2381,8 @@ FilterPageBuilder.SetView:
 Guid.CreateGuid:
   layer: runtime-api
   category: Guid
-  status: gap
+  status: covered
+  tests: tests/bucket-1/57-create-guid
   notes: overloads=1
 
 Guid.CreateSequentialGuid:
