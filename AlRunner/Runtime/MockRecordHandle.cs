@@ -23,7 +23,8 @@ public class MockRecordHandle
     // Whether this handle represents a temporary record variable.
     private readonly bool _isTemporary;
     // Private row store for temporary records — isolated from the global _tables.
-    private readonly List<Dictionary<int, NavValue>>? _tempRows;
+    // Not readonly so that ALCopy(source, shareTable:=true) can share the same list.
+    private List<Dictionary<int, NavValue>>? _tempRows;
 
     // Global in-memory table store: tableId -> list of rows (each row = dict of fieldNo -> NavValue)
     private static readonly Dictionary<int, List<Dictionary<int, NavValue>>> _tables = new();
@@ -1448,15 +1449,32 @@ public class MockRecordHandle
         _fields = new Dictionary<int, NavValue>(other._fields);
     }
 
-    public void ALCopy(MockRecordHandle source, bool shareFilters = false)
+    public void ALCopy(MockRecordHandle source, bool shareTable = false)
     {
+        // Always copy field values and filters (AL Copy always does both)
         _fields = new Dictionary<int, NavValue>(source._fields);
-        if (shareFilters)
+        _filters.Clear();
+        foreach (var kv in source._filters)
+            _filters[kv.Key] = kv.Value;
+
+        // For temporary records, handle the table data:
+        if (_isTemporary && source._isTemporary)
         {
-            // Copy filters too
-            _filters.Clear();
-            foreach (var kv in source._filters)
-                _filters[kv.Key] = kv.Value;
+            if (shareTable)
+            {
+                // ShareTable=true: share the same row list — inserts/deletes via
+                // one variable are immediately visible via the other.
+                _tempRows = source._tempRows;
+            }
+            else
+            {
+                // ShareTable=false (default): deep-copy source rows into an
+                // independent list so both start with the same data but
+                // subsequent mutations are isolated.
+                _tempRows = source._tempRows!
+                    .Select(row => new Dictionary<int, NavValue>(row))
+                    .ToList();
+            }
         }
     }
 

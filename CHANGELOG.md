@@ -40,6 +40,17 @@ All notable changes to this project are documented here. Format based on
   tests: Decimal sum, Integer sum, filtered sum, multi-field sum, empty result (→ 0),
   and filter-excludes-all (→ 0). Coverage map: `Table.CalcSums` moved from `gap` to
   `covered`.
+- **`Record.Copy` fix + coverage (#295)** — `ALCopy` only copied filters when
+  `shareFilters=true` (wrong parameter name and wrong default). Fixed: filters
+  are now always copied (AL `Copy` always transfers both field values and
+  filters). Added ShareTable=true support for temporary records: when
+  `shareTable=true` both temp record variables share the same row list so that
+  inserts/deletes via one are visible via the other. New suite
+  `tests/bucket-1/51-record-copy` adds 7 proving tests: field value transfer,
+  filter transfer (GetFilters match, Count restricted), ShareTable=true shares
+  temp data and new inserts are visible in both, ShareTable=false creates
+  independent temp copies, and source filters not mutated by target changes.
+  Coverage map: `Table.Copy` moved from `gap` to `covered`.
 - **`Record.DeleteAll` coverage (#289)** — `ALDeleteAll` was already fully
   implemented in `MockRecordHandle` (no-filter variant clears all rows; filter
   variant removes only matching rows). New suite `tests/bucket-1/50-deleteall`
