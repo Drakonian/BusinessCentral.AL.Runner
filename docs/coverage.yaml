@@ -4587,13 +4587,15 @@ RecordId.GetRecord:
   layer: runtime-api
   category: RecordId
   status: gap
-  notes: overloads=1
+  notes: overloads=1; the 1-argument form GetRecord(var Rec) does not exist in BC 26–28 (AL0126). The 0-argument form GetRecord() exists but returns a Record directly — runner behaviour for empty RecordId TBD.
 
 RecordId.TableNo:
   layer: runtime-api
   category: RecordId
-  status: gap
-  notes: overloads=1
+  status: covered
+  notes: overloads=1; BC native NavRecordId.ALTableNo works standalone — returns 0 for default/empty RecordId.
+  tests:
+    - tests/bucket-1/194-small-gaps-recordid-list-nametable
 
 # ── RecordRef ───────────────────────────────────────────────────
 
@@ -9461,14 +9463,18 @@ XmlElement.WriteTo:
 XmlNameTable.Add:
   layer: runtime-api
   category: XmlNameTable
-  status: gap
-  notes: overloads=1
+  status: covered
+  notes: overloads=1; BC native NavXmlNameTable.ALAdd works standalone via MockXmlNameTable wrapper.
+  tests:
+    - tests/bucket-1/194-small-gaps-recordid-list-nametable
 
 XmlNameTable.Get:
   layer: runtime-api
   category: XmlNameTable
-  status: gap
-  notes: overloads=1
+  status: covered
+  notes: overloads=1; MockXmlNameTable.ALGet returns false/empty instead of throwing NavNCLKeyNotFoundException when key absent.
+  tests:
+    - tests/bucket-1/194-small-gaps-recordid-list-nametable
 
 # ── XmlNamespaceManager ─────────────────────────────────────────
 
