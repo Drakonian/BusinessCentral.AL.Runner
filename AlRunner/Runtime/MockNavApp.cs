@@ -68,4 +68,38 @@ public static class MockNavApp
     /// Overload with optional AppId: IsEntitled(Id: Text[250]; AppId: Guid).
     /// </summary>
     public static bool ALIsEntitled(DataError errorLevel, NavText id, Guid appId) => true;
+
+    /// <summary>
+    /// NavApp.GetResourceAsText(ResourceName [, TextEncoding]) : Text — returns the named
+    /// embedded resource as a string. No .app bundle in standalone mode; returns empty string.
+    /// BC emits: ALNavApp.ALGetResourceAsText(null, NavText [, object?]) → NavText
+    /// (The error-level arg is null in BC's generated C# for resource methods.)
+    /// </summary>
+    public static NavText ALGetResourceAsText(object? errorLevel, NavText resourceName)
+        => NavText.Empty;
+
+    public static NavText ALGetResourceAsText(object? errorLevel, NavText resourceName, object? encoding)
+        => NavText.Empty;
+
+    /// <summary>
+    /// NavApp.GetResourceAsJson(ResourceName [, TextEncoding]) : JsonObject — returns the
+    /// named embedded resource as a JSON object. No .app in standalone mode; returns default.
+    /// BC emits: ALNavApp.ALGetResourceAsJson(null, NavText [, object?]) → NavJsonObject
+    /// </summary>
+    public static NavJsonObject ALGetResourceAsJson(object? errorLevel, NavText resourceName)
+        => default;
+
+    public static NavJsonObject ALGetResourceAsJson(object? errorLevel, NavText resourceName, object? encoding)
+        => default;
+
+    /// <summary>
+    /// NavApp.ListResources([ResourceType]) : List of [Text] — returns names of embedded
+    /// resources. No .app in standalone mode; returns empty list.
+    /// BC emits: ALNavApp.ALListResources(null [, NavText]) → NavList&lt;NavText&gt;
+    /// </summary>
+    public static NavList<NavText> ALListResources(object? errorLevel)
+        => NavList<NavText>.Default;
+
+    public static NavList<NavText> ALListResources(object? errorLevel, NavText resourceType)
+        => NavList<NavText>.Default;
 }
