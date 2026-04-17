@@ -2118,6 +2118,40 @@ public void ClearApplicationMemberVariables()
                         SyntaxFactory.Argument(secondArg)
                     }))).WithTriviaFrom(node);
             }
+            // ALSelectNodes(DataError, xpath, nodeList) — 3 args, first is DataError.
+            // NavXmlDeclaration.ALSelectNodes throws NavNCLNotSupportedOperationException.
+            // Redirect through AlCompat.XmlSelectNodes which is a no-op for declarations
+            // (leaves the caller's empty-initialized nodeList unchanged) and delegates to
+            // the normal NavXmlNode path otherwise.
+            // ALSelectSingleNode follows the same pattern with ByRef<NavXmlNode>.
+            //
+            // IMPORTANT: the DataError argument (arg[0]) must be forwarded verbatim.
+            // BC transpiles SelectSingleNode no-match as DataError.ReturnFalse; replacing
+            // it with DataError.ThrowError would turn a "return false" into a throw.
+            if (xmlMethodName is "ALSelectNodes" or "ALSelectSingleNode" &&
+                node.ArgumentList.Arguments.Count == 3 &&
+                node.ArgumentList.Arguments[0].Expression.ToString().StartsWith("DataError"))
+            {
+                var helperName = xmlMethodName == "ALSelectNodes"
+                    ? "XmlSelectNodes"
+                    : "XmlSelectSingleNode";
+                var receiverExpr = (ExpressionSyntax)Visit(xmlDocMa.Expression)!;
+                var dataErrorExpr = (ExpressionSyntax)Visit(node.ArgumentList.Arguments[0].Expression)!;
+                var xpathExpr = (ExpressionSyntax)Visit(node.ArgumentList.Arguments[1].Expression)!;
+                var thirdArgExpr = (ExpressionSyntax)Visit(node.ArgumentList.Arguments[2].Expression)!;
+                return SyntaxFactory.InvocationExpression(
+                    SyntaxFactory.MemberAccessExpression(
+                        SyntaxKind.SimpleMemberAccessExpression,
+                        SyntaxFactory.IdentifierName("AlCompat"),
+                        SyntaxFactory.IdentifierName(helperName)),
+                    SyntaxFactory.ArgumentList(SyntaxFactory.SeparatedList(new[]
+                    {
+                        SyntaxFactory.Argument(receiverExpr),
+                        SyntaxFactory.Argument(dataErrorExpr),
+                        SyntaxFactory.Argument(xpathExpr),
+                        SyntaxFactory.Argument(thirdArgExpr)
+                    }))).WithTriviaFrom(node);
+            }
         }
 
         // Now recurse into children first

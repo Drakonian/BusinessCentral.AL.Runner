@@ -2323,29 +2323,67 @@ public static class AlCompat
     // NavXmlDocument (standalone documents have no parent to manipulate).
     public static void XmlRemove(object node)
     {
-        // NavXmlDocument checked first: it may inherit NavXmlNode on some BC versions,
-        // and its ALRemove reaches into NavEnvironment (BC service-tier logging) which
-        // is unavailable standalone. A standalone document has no parent, so no-op is correct.
+        // NavXmlDeclaration: Remove() throws NavNCLInvalidOperationException in BC's runtime
+        // (declarations are not regular child nodes). Treat as no-op.
+        if (node is NavXmlDeclaration) return;
+        // NavXmlDocument checked before NavXmlNode: on some BC versions NavXmlDocument
+        // inherits NavXmlNode, and ALRemove on a document reaches NavEnvironment (service-tier
+        // logging) which is unavailable standalone. A document has no parent, so no-op is correct.
         if (node is NavXmlDocument) return;
         if (node is NavXmlNode n) n.ALRemove(DataError.ThrowError);
     }
 
     public static void XmlAddAfterSelf(object node, NavXmlNode sibling)
     {
+        if (node is NavXmlDeclaration) return;
         if (node is NavXmlDocument) return;
         if (node is NavXmlNode n) n.ALAddAfterSelf(DataError.ThrowError, sibling);
     }
 
     public static void XmlAddBeforeSelf(object node, NavXmlNode sibling)
     {
+        if (node is NavXmlDeclaration) return;
         if (node is NavXmlDocument) return;
         if (node is NavXmlNode n) n.ALAddBeforeSelf(DataError.ThrowError, sibling);
     }
 
     public static void XmlReplaceWith(object node, NavXmlNode replacement)
     {
+        if (node is NavXmlDeclaration) return;
         if (node is NavXmlDocument) return;
         if (node is NavXmlNode n) n.ALReplaceWith(DataError.ThrowError, replacement);
+    }
+
+    // BC transpiles the xpath argument to a plain string (not NavText), so both
+    // overloads accept string to match what the rewriter emits.
+    //
+    // The DataError argument is forwarded verbatim from the BC-generated call.
+    // BC uses DataError.ReturnFalse for SelectSingleNode — replacing it with
+    // DataError.ThrowError turns a "return false on no-match" into a throw.
+    //
+    // ALSelectNodes/ALSelectSingleNode are NOT virtual on NavXmlNode; dynamic dispatch
+    // ensures the concrete type's override is called (matching the pre-interceptor
+    // behaviour where BC-generated code held the concrete-typed reference).
+    //
+    // NavXmlDeclaration: declarations have no child nodes. Return false and leave the
+    // caller's NodeList variable at its default (null). The caller must not dereference
+    // it after a failed SelectNodes call — matching real BC behaviour.
+    public static bool XmlSelectNodes(object node, DataError de, string xpath, ByRef<NavXmlNodeList> nodeListRef)
+    {
+        if (node is NavXmlDeclaration)
+            return false;
+        dynamic dyn = node;
+        return dyn.ALSelectNodes(de, xpath, nodeListRef);
+    }
+
+    // NavXmlDeclaration.ALSelectSingleNode also throws NavNCLNotSupportedOperationException.
+    // Declarations have no child nodes — return false regardless of DataError.
+    public static bool XmlSelectSingleNode(object node, DataError de, string xpath, ByRef<NavXmlNode> resultRef)
+    {
+        if (node is NavXmlDeclaration)
+            return false;
+        dynamic dyn = node;
+        return dyn.ALSelectSingleNode(de, xpath, resultRef);
     }
 
     // -----------------------------------------------------------------------
