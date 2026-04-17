@@ -821,7 +821,9 @@ customaction_declaration:
 fileuploadaction_declaration:
   layer: syntax
   category: page
-  status: gap
+  status: covered
+  tests:
+    - tests/bucket-2/206-fileupload-action
 
 grid_section:
   layer: syntax
@@ -1165,7 +1167,8 @@ addfirst_fieldgroup_modification:
   layer: syntax
   category: modification
   status: covered
-  tests: tests/bucket-1/277-addfirst-fieldgroup
+  tests:
+    - tests/bucket-1/277-addfirst-fieldgroup
   notes: >
     PrepareSourceForStandalone strips addfirst(GroupName; Fields) lines from
     tableextension fieldgroups before AL compilation — the runner's BC compiler
