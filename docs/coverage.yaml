@@ -5337,8 +5337,9 @@ Report.WordXmlPart:
 ReportInstance.Break:
   layer: runtime-api
   category: ReportInstance
-  status: gap
-  notes: overloads=1
+  status: covered
+  tests: tests/bucket-1/279-report-instance
+  notes: overloads=1; Injected as no-op method into stripped report class by RoslynRewriter.
 
 ReportInstance.CreateTotals:
   layer: runtime-api
@@ -5349,14 +5350,16 @@ ReportInstance.CreateTotals:
 ReportInstance.DefaultLayout:
   layer: runtime-api
   category: ReportInstance
-  status: gap
-  notes: overloads=1
+  status: covered
+  tests: tests/bucket-1/279-report-instance
+  notes: overloads=1; MockReportHandle.DefaultLayout() returns default NavDefaultLayout.
 
 ReportInstance.ExcelLayout:
   layer: runtime-api
   category: ReportInstance
-  status: gap
-  notes: overloads=1
+  status: covered
+  tests: tests/bucket-1/279-report-instance
+  notes: overloads=1; MockReportHandle.ExcelLayout() returns false (no layout data).
 
 ReportInstance.Execute:
   layer: runtime-api
@@ -5367,20 +5370,23 @@ ReportInstance.Execute:
 ReportInstance.FormatRegion:
   layer: runtime-api
   category: ReportInstance
-  status: gap
-  notes: overloads=1
+  status: covered
+  tests: tests/bucket-1/279-report-instance
+  notes: overloads=1; MockReportHandle.FormatRegion property (get/set).
 
 ReportInstance.IsReadOnly:
   layer: runtime-api
   category: ReportInstance
-  status: gap
-  notes: overloads=1
+  status: covered
+  tests: tests/bucket-1/279-report-instance
+  notes: overloads=1; MockReportHandle.ALIsReadOnly always returns false.
 
 ReportInstance.Language:
   layer: runtime-api
   category: ReportInstance
-  status: gap
-  notes: overloads=1
+  status: covered
+  tests: tests/bucket-1/279-report-instance
+  notes: overloads=1; MockReportHandle.Language property (get/set).
 
 ReportInstance.NewPage:
   layer: runtime-api
@@ -5397,8 +5403,9 @@ ReportInstance.NewPagePerRecord:
 ReportInstance.ObjectId:
   layer: runtime-api
   category: ReportInstance
-  status: gap
-  notes: overloads=1
+  status: covered
+  tests: tests/bucket-1/279-report-instance
+  notes: overloads=1; MockReportHandle.ObjectID() returns ReportId as text.
 
 ReportInstance.PageNo:
   layer: runtime-api
@@ -5427,38 +5434,44 @@ ReportInstance.Print:
 ReportInstance.PrintOnlyIfDetail:
   layer: runtime-api
   category: ReportInstance
-  status: gap
-  notes: overloads=1
+  status: covered
+  tests: tests/bucket-1/279-report-instance
+  notes: overloads=1; Injected as bool property into stripped report class by RoslynRewriter.
 
 ReportInstance.Quit:
   layer: runtime-api
   category: ReportInstance
-  status: gap
-  notes: overloads=1
+  status: covered
+  tests: tests/bucket-1/279-report-instance
+  notes: overloads=1; Injected as no-op method into stripped report class by RoslynRewriter.
 
 ReportInstance.RDLCLayout:
   layer: runtime-api
   category: ReportInstance
-  status: gap
-  notes: overloads=1
+  status: covered
+  tests: tests/bucket-1/279-report-instance
+  notes: overloads=1; MockReportHandle.RDLCLayout() returns false (no layout data).
 
 ReportInstance.Run:
   layer: runtime-api
   category: ReportInstance
-  status: gap
-  notes: overloads=1
+  status: covered
+  tests: tests/bucket-1/279-report-instance
+  notes: overloads=1; MockReportHandle.Run() executes full report lifecycle.
 
 ReportInstance.RunModal:
   layer: runtime-api
   category: ReportInstance
-  status: gap
-  notes: overloads=1
+  status: covered
+  tests: tests/bucket-1/279-report-instance
+  notes: overloads=1; MockReportHandle.RunModal() executes full report lifecycle.
 
 ReportInstance.RunRequestPage:
   layer: runtime-api
   category: ReportInstance
-  status: gap
-  notes: overloads=1
+  status: covered
+  tests: tests/bucket-1/279-report-instance
+  notes: overloads=1; MockReportHandle.RunRequestPage() returns placeholder text.
 
 ReportInstance.SaveAs:
   layer: runtime-api
@@ -5469,38 +5482,44 @@ ReportInstance.SaveAs:
 ReportInstance.SaveAsExcel:
   layer: runtime-api
   category: ReportInstance
-  status: gap
-  notes: overloads=1
+  status: covered
+  tests: tests/bucket-1/279-report-instance
+  notes: overloads=1; MockReportHandle.SaveAsExcel() is a no-op in standalone mode.
 
 ReportInstance.SaveAsHtml:
   layer: runtime-api
   category: ReportInstance
-  status: gap
-  notes: overloads=1
+  status: covered
+  tests: tests/bucket-1/279-report-instance
+  notes: overloads=1; MockReportHandle.SaveAsHtml() is a no-op in standalone mode.
 
 ReportInstance.SaveAsPdf:
   layer: runtime-api
   category: ReportInstance
-  status: gap
-  notes: overloads=1
+  status: covered
+  tests: tests/bucket-1/279-report-instance
+  notes: overloads=1; MockReportHandle.SaveAsPdf() is a no-op in standalone mode.
 
 ReportInstance.SaveAsWord:
   layer: runtime-api
   category: ReportInstance
-  status: gap
-  notes: overloads=1
+  status: covered
+  tests: tests/bucket-1/279-report-instance
+  notes: overloads=1; MockReportHandle.SaveAsWord() is a no-op in standalone mode.
 
 ReportInstance.SaveAsXml:
   layer: runtime-api
   category: ReportInstance
-  status: gap
-  notes: overloads=1
+  status: covered
+  tests: tests/bucket-1/279-report-instance
+  notes: overloads=1; MockReportHandle.SaveAsXml() is a no-op in standalone mode.
 
 ReportInstance.SetTableView:
   layer: runtime-api
   category: ReportInstance
-  status: gap
-  notes: overloads=1
+  status: covered
+  tests: tests/bucket-1/279-report-instance
+  notes: overloads=1; MockReportHandle.SetTableView() copies table view to report's Rec.
 
 ReportInstance.ShowOutput:
   layer: runtime-api
@@ -5511,14 +5530,16 @@ ReportInstance.ShowOutput:
 ReportInstance.Skip:
   layer: runtime-api
   category: ReportInstance
-  status: gap
-  notes: overloads=1
+  status: covered
+  tests: tests/bucket-2/119-report-skip
+  notes: overloads=1; Injected as no-op method into stripped report class by RoslynRewriter.
 
 ReportInstance.TargetFormat:
   layer: runtime-api
   category: ReportInstance
-  status: gap
-  notes: overloads=1
+  status: covered
+  tests: tests/bucket-1/279-report-instance
+  notes: overloads=1; MockReportHandle.ALTargetFormat returns default NavReportFormat.
 
 ReportInstance.TotalsCausedBy:
   layer: runtime-api
@@ -5529,8 +5550,9 @@ ReportInstance.TotalsCausedBy:
 ReportInstance.UseRequestPage:
   layer: runtime-api
   category: ReportInstance
-  status: gap
-  notes: overloads=1
+  status: covered
+  tests: tests/bucket-1/279-report-instance
+  notes: overloads=1; MockReportHandle.UseRequestForm property (get/set).
 
 ReportInstance.ValidateAndPrepareLayout:
   layer: runtime-api
@@ -5541,14 +5563,16 @@ ReportInstance.ValidateAndPrepareLayout:
 ReportInstance.WordLayout:
   layer: runtime-api
   category: ReportInstance
-  status: gap
-  notes: overloads=1
+  status: covered
+  tests: tests/bucket-1/279-report-instance
+  notes: overloads=1; MockReportHandle.WordLayout() returns false (no layout data).
 
 ReportInstance.WordXmlPart:
   layer: runtime-api
   category: ReportInstance
-  status: gap
-  notes: overloads=1
+  status: covered
+  tests: tests/bucket-1/279-report-instance
+  notes: overloads=1; MockReportHandle.WordXmlPart() returns empty string.
 
 # ── RequestPage ─────────────────────────────────────────────────
 
