@@ -7611,6 +7611,16 @@ TestPage.Yes:
   tests:
     - tests/bucket-1/187-testpage-methods
 
+TestPage.GetRecord:
+  layer: runtime-api
+  category: TestPage
+  status: not-possible
+  notes: >
+    AL0132 in BC 26–28: 'TestPage TGR Page' does not contain a definition for 'GetRecord'.
+    TestPage.GetRecord(var Rec) was removed in BC 26+. MockTestPageHandle.ALGetRecord()
+    exists internally (returns _currentRecord after GoToKey/GoToRecord) but the AL method
+    can no longer be called from test code compiled against BC 26+ DLLs.
+
 # ── TestPart ────────────────────────────────────────────────────
 
 TestPart.Caption:
