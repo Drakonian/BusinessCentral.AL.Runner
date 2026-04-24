@@ -6,6 +6,46 @@ All notable changes to this project are documented here. Format based on
 
 ## [Unreleased]
 
+## [1.0.25] - 2026-04-24
+
+### Added
+- AL test count badge + remove redundant perf check step
+- add Version.Create(Text) 1-arg ALCreate overload — closes #1296
+- add missing ALFieldError, AutoFormat, EnsureGlobalVars on Record types
+
+### Fixed
+- route CalcDate through AlCompat to avoid NavNCLDateInvalidException
+- bump AL compiler to v17.0 for BC 28 runtime 17 support — closes #1255
+- add object overloads for string-expecting methods — closes #1297
+- add object catch-all overloads for record operations — closes #1260
+- add ALInvoke<T> extension for string receivers — closes #1298
+- rewrite Page<N>.PromptMode static self-reference — closes #1266
+- add BookmarkType, CheckType, and SetRecord stubs on Page classes — closes #1262
+- add implicit string conversion to MockInStream — closes #1273
+- add implicit int→MockFieldRef conversion for BC-emitted field numbers
+- add 3-arg Invoke(extensionId, memberId, args) to MockFormHandle and MockReportHandle — closes #1282
+- add DataError-prefixed overloads for field-level record methods
+- add 3-arg overloads for JsonObject.GetInteger/GetBoolean/GetDecimal
+- add string overload for AlCompat.CreateErrorInfo — closes #1278
+- read application_Version instead of customDimensions for version
+- don't reopen closed issues from telemetry
+- add missing GetUrl overloads (1-arg, 2-arg) — closes #1299
+- add Clear method to MockDataTransfer — closes #1269
+- add CheckType no-op stub on Record classes — closes #1280
+- rewrite MockRecordRef.Factory for RecordRef array declarations
+- change MockMedia.ALMediaId from method to property
+- remove MockDialog.ALUpdate(int, int) to resolve CS0121 NavValue/int ambiguity
+- use source_indices instead of source_group_keys for row matching
+- implicit MockRecordHandle to MockRecordRef conversion
+- resolve Codeunit305002 ID collision between 96-validate-no-value and 305-filterpagebuilder-assign
+- add 2-arg ALValidateSafe overload to injected Record class
+- add ALAssign to MockFilterPageBuilder — closes #1276
+- normalize Record/Codeunit types in triage aggregation
+
+### Changed
+- fix windows alc resolution in tests
+- Fix/triage record aggregation
+
 ## [1.0.24] - 2026-04-24
 
 ### Fixed
