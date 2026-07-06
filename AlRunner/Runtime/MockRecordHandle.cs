@@ -961,7 +961,8 @@ public class MockRecordHandle : IConvertible
     {
         var table = GetRows();
         var pkFields = GetPrimaryKeyFields();
-        if (keyValues.Length > pkFields.Length && _authoritativePks.Contains(_tableId))
+        bool authoritative = _authoritativePks.Contains(_tableId);
+        if (keyValues.Length > pkFields.Length && authoritative)
         {
             // The platform raises this unconditionally — even when Get's return
             // value is consumed — and quotes the table name, not the caption.
@@ -969,15 +970,31 @@ public class MockRecordHandle : IConvertible
             // stub PK width would reject calls the real table accepts.
             throw new Exception($"Too many key fields were specified, so \"{ALTableName}\" could not be retrieved. The number of fields in the primary key is {pkFields.Length}.");
         }
+        // Missing trailing key values bind as the field type's default and the
+        // lookup requires an exact full-PK match, like the real service tier —
+        // never a prefix match. Only for authoritative PKs: an overstated
+        // fallback or stub PK width would demand defaults for fields that are
+        // not actually part of the real key.
+        bool bindDefaults = keyValues.Length < pkFields.Length && authoritative;
+        int compareCount = bindDefaults ? pkFields.Length : Math.Min(keyValues.Length, pkFields.Length);
+        // Per-field type-default strings serve two roles: they stand in for
+        // key values Get was called without, and they substitute for absent
+        // row entries — a PK field never assigned before Insert IS its type
+        // default on the real service tier, not a distinct empty value.
+        var defaultStrings = new string[compareCount];
+        var keyStrings = new string[compareCount];
+        for (int i = 0; i < compareCount; i++)
+        {
+            defaultStrings[i] = DefaultPkValueString(pkFields[i]);
+            keyStrings[i] = i < keyValues.Length ? NavValueToString(keyValues[i]) : defaultStrings[i];
+        }
         foreach (var row in table)
         {
             bool match = true;
-            for (int i = 0; i < keyValues.Length && i < pkFields.Length; i++)
+            for (int i = 0; i < compareCount; i++)
             {
-                var fieldNo = pkFields[i];
-                var rowVal = row.TryGetValue(fieldNo, out var rv) ? NavValueToString(rv) : "";
-                var keyVal = NavValueToString(keyValues[i]);
-                if (!PkValuesEqual(rowVal, keyVal)) { match = false; break; }
+                var rowVal = row.TryGetValue(pkFields[i], out var rv) ? NavValueToString(rv) : defaultStrings[i];
+                if (!PkValuesEqual(rowVal, keyStrings[i])) { match = false; break; }
             }
             if (match)
             {
@@ -988,7 +1005,12 @@ public class MockRecordHandle : IConvertible
         }
         if (errorLevel == DataError.ThrowError)
         {
-            var keyStr = string.Join(", ", keyValues.Select(v => NavValueToString(v)));
+            // Container-verified on BC 28.1: every compared PK field is
+            // listed by name with its value — bound trailing defaults
+            // included — joined with a comma and no space, e.g.
+            // "Identification fields and values: Code 1='E',Int 1='0'".
+            var keyStr = string.Join(",", Enumerable.Range(0, compareCount).Select(i =>
+                $"{TableFieldRegistry.GetFieldName(_tableId, pkFields[i]) ?? pkFields[i].ToString(System.Globalization.CultureInfo.InvariantCulture)}='{keyStrings[i]}'"));
             string tableName = TableFieldRegistry.GetTableCaption(_tableId)
                                ?? TableFieldRegistry.GetTableName(_tableId)
                                ?? $"table {_tableId}";
@@ -1066,6 +1088,23 @@ public class MockRecordHandle : IConvertible
                 System.Globalization.CultureInfo.InvariantCulture, out var db))
             return da == db;
         return false;
+    }
+
+    /// <summary>
+    /// Stringified default value of a PK field's type, for comparing rows
+    /// against key values that Get was called without. Derived via
+    /// <see cref="DefaultForType"/> + <see cref="NavValueToString"/> so the
+    /// bound default and a stored default-valued field go through the same
+    /// formatter and cannot drift apart. Enum fields store as NavOption but
+    /// their type name (<c>Enum "My Enum"</c>) hits the mapper's Text
+    /// fallback, so the registry's parsed enum-field set decides instead.
+    /// </summary>
+    private string DefaultPkValueString(int fieldNo)
+    {
+        var navType = TableFieldRegistry.GetEnumName(_tableId, fieldNo) != null
+            ? NavType.Option
+            : MockFieldRef.MapAlTypeToNavType(TableFieldRegistry.GetFieldTypeName(_tableId, fieldNo) ?? "");
+        return NavValueToString(DefaultForType(navType));
     }
 
     // -----------------------------------------------------------------------
@@ -3089,6 +3128,9 @@ public class MockRecordHandle : IConvertible
     private static readonly System.Reflection.PropertyInfo? _navDecimalValueProp =
         typeof(NavDecimal).GetProperty("Value");
 
+    private static readonly System.Reflection.PropertyInfo? _navTimeValueProp =
+        typeof(NavTime).GetProperty("Value");
+
     /// <summary>
     /// Produce a canonical string form of a <see cref="NavValue"/> for
     /// filter comparison and PK hashing. **Do not fall back to
@@ -3113,6 +3155,28 @@ public class MockRecordHandle : IConvertible
             case NavDate nd2: try { return ((DateTime)nd2).ToString("o", System.Globalization.CultureInfo.InvariantCulture); } catch { return ""; }
             case NavDateTime ndt: try { return ((DateTime)ndt).ToString("o", System.Globalization.CultureInfo.InvariantCulture); } catch { return ""; }
             case NavOption nopt: return nopt.Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            case NavDuration ndur: return ((long)ndur).ToString(System.Globalization.CultureInfo.InvariantCulture);
+        }
+
+        // NavTime: the Value property carries the time as a DateTime (date
+        // part meaningless); NavTime.ToString() traps into NavSession-
+        // dependent formatters, so extract via cached reflection instead.
+        if (value is NavTime ntime)
+        {
+            try
+            {
+                if (_navTimeValueProp?.GetValue(ntime) is DateTime tdt)
+                    return tdt.ToString("HH:mm:ss.fffffff", System.Globalization.CultureInfo.InvariantCulture);
+            }
+            catch { }
+            return "";
+        }
+
+        // NavDateFormula: its ToString() yields the raw formula text without
+        // a NavSession (AlScope.CalcDate already relies on this).
+        if (value is NavDateFormula ndf)
+        {
+            try { return ndf.ToString() ?? ""; } catch { return ""; }
         }
 
         // NavDecimal: use the cached PropertyInfo instead of reflecting per call.
